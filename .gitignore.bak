@@ -1,0 +1,7 @@
+.Rproj.user
+docs
+inst/doc
+vignettes/*.html
+vignettes/*.R
+/doc/
+/Meta/

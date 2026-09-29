@@ -1,0 +1,354 @@
+---
+title: "Uuden surveypaketin perustaminen SurveyDokumin avulla"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Uuden surveypaketin perustaminen SurveyDokumin avulla}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Mitä tämä opas kattaa
+
+SurveyDokumin työnkulku jakautuu kahteen osaan:
+
+1. **Kertaluonteiset pakettirakenteen vaiheet** — uuden R-paketin luonti aineistollesi,
+   kansiorakenne ja dokumentaatiosivuston rakentaminen. Näihin käytetään suoraan
+   yleiskäyttöisiä työkaluja, **usethis**- ja **pkgdown**-paketteja — SurveyDokum ei
+   kääri näitä omiksi funktioikseen, koska ne eivät ole surveyaineistolle
+   ominaisia vaiheita (ks. lopun "Miksi nämä vaiheet eivät ole omia
+   funktioita").
+2. **Itse surveyaineiston käsittely ja dokumentointi** — tähän SurveyDokum tarjoaa
+   `sd_`-alkuiset funktiot: aineiston luku, muuttujaroolien tunnistus, tilastot,
+   LLM-pohjainen kuvaileva dokumentaatio, roxygen2-dokumentaatio ja koodikirja.
+
+Tämä opas käy läpi molemmat osat yhtenä eheänä polkuna alusta loppuun. Yksittäisten
+`sd_`-funktioiden tarkempi käyttö ja parametrit löytyvät niiden omista
+ohjesivuista (esim. `?sd_read`, `?sd_summarise`, `?sd_document`).
+
+Tästä oppaasta on myös rinnakkaiset käännökset englanniksi ("Getting started with
+SurveyDokum") ja ruotsiksi ("Komma igång med SurveyDokum") -- kaikki kolme käyvät
+läpi saman työnkulun.
+
+## Edellytykset
+
+Asenna tarvittavat paketit etukäteen:
+
+```r
+install.packages(c("usethis", "devtools", "roxygen2", "pkgdown"))
+install.packages(c("ellmer", "haven", "readxl", "codebook", "rmarkdown"))
+```
+
+LLM-pohjaiset vaiheet (`sd_document()`, `sd_generate_roxygen()`) vaativat lisäksi
+paikallisesti asennetun ja käynnissä olevan [Ollaman](https://ollama.com/) sekä
+ladatun mallin, esim.:
+
+```sh
+ollama pull gemma3:12b
+```
+
+Voit tarkistaa Ollama-yhteyden etukäteen funktiolla `sd_check_ollama()`.
+
+## Vaihe 1: Luo pakettipohja uudelle aineistolle
+
+Jokainen dokumentoitava surveyaineisto saa oman pienen R-paketin — samaan tapaan
+kuin SurveyDokum itse on rakennettu. `usethis::create_package()` avaa uuden
+RStudio-ikkunan; jatka loput vaiheet siinä ikkunassa.
+
+```r
+usethis::create_package("polku/MinunSurveyni")
+```
+
+## Vaihe 2: Luo kansiorakenne
+
+```r
+usethis::use_data_raw("aineisto")   # luo data-raw/aineisto.R
+
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+```
+
+Muista lisätä `SurveyDokum` uuden paketin `DESCRIPTION`-tiedoston `Imports`- tai
+`Suggests`-kenttään (esim. `usethis::use_dev_package("SurveyDokum")`, jos
+SurveyDokum ei ole julkaistu CRANissa).
+
+## Vaihe 3: Lue ja valmistele aineisto
+
+```r
+library(SurveyDokum)
+
+aineisto <- sd_read("data-raw/aineistoni.sav")   # csv/tsv/xlsx/xls/sav/dta/rds
+
+# Puuttuvien arvojen koodit siivotaan ennen roolitunnistusta:
+aineisto <- sd_set_missing(aineisto, codes = c(-9, -1))
+
+# Automaattinen muuttujaroolien tunnistus (id/nominal/likert/continuous/date/text):
+aineisto <- sd_detect_roles(aineisto)
+
+# Tarkista tulos ja korjaa tarvittaessa käsin:
+aineisto$meta$roles
+aineisto <- sd_set_role(aineisto, "jokin_muuttuja", "nominal")
+
+# Tilastollinen yhteenveto — avoimista teksteistä näytetään vain agregaatit,
+# ei koskaan yksittäisiä vastauksia:
+yhteenveto <- sd_summarise(aineisto)
+print(yhteenveto)
+```
+
+## Vaihe 4: Tallenna data pakettiin
+
+```r
+survey_data <- sd_get_data(aineisto)
+usethis::use_data(survey_data, overwrite = TRUE)
+```
+
+## Vaihe 5: Dokumentaatio — ihmisluettava kuvaus ja roxygen2
+
+Ihmisluettava, LLM:n kirjoittama kuvaus (esim. menetelmädokumentaatioon):
+
+```r
+dokumentaatio <- sd_document(aineisto, model = "gemma3:12b")
+print(dokumentaatio)   # lue tulos huolella ennen tallennusta
+
+# Kun teksti näyttää hyvältä:
+sd_document(aineisto, model = "gemma3:12b", save_to = "inst/methodology/kuvaus.txt")
+```
+
+`roxygen2`-datadokumentaatio `?survey_data`-ohjesivulle:
+
+```r
+roxygen_tulos <- sd_generate_roxygen(aineisto, "survey_data")   # dry_run = TRUE oletuksena
+print(roxygen_tulos)   # tarkista teksti ennen kirjoittamista levylle
+
+# Kun teksti näyttää hyvältä, kirjoita se R/survey_data.R-tiedostoon:
+sd_generate_roxygen(aineisto, "survey_data", dry_run = FALSE)
+
+devtools::document()
+?survey_data   # tarkista lopputulos
+```
+
+Sekä `sd_document()` että `sd_generate_roxygen()` hyväksyvät `language`-parametrin
+(oletus `"fi"`, lisäksi tuettuina `"en"` ja `"sv"`), joka ohjaa sitä millä kielellä
+LLM kirjoittaa tuottamansa kuvailevan tekstin -- riippumatta siitä, millä kielellä
+itse aineiston muuttujalabelit ovat. Näin sama suomenkielinen aineisto voidaan
+dokumentoida myös englanniksi tai ruotsiksi esim. kansainvälistä levitystä varten:
+
+```r
+dokumentaatio_en <- sd_document(aineisto, model = "gemma3:12b", language = "en")
+roxygen_tulos_en <- sd_generate_roxygen(aineisto, "survey_data", language = "en")
+
+dokumentaatio_sv <- sd_document(aineisto, model = "gemma3:12b", language = "sv")
+roxygen_tulos_sv <- sd_generate_roxygen(aineisto, "survey_data", language = "sv")
+```
+
+Huom: tämä ei vaikuta itse tilastojen (`sd_summarise()`/`format()`) esitystapaan,
+joka on toistaiseksi aina suomenkielinen -- vain LLM:lle annettu ohjeistus ja
+sen kirjoittama teksti muuttuvat.
+
+## Vaihe 5b: Dokumentaation päivitys kun aineistoon tulee uusia muuttujia
+
+Tutkimushankkeen edetessä aineistoon syntyy usein uusia muuttujia -- lasketaan
+summapisteitä vanhojen kysymysten pohjalta, tai aineistoon lisätään uusi aalto
+kysymyksiä. `sd_generate_roxygen()`-funktion ajaminen uudelleen kirjoittaisi
+koko `\describe{}`-lohkon alusta, jolloin menetettäisiin kaikki jo tarkistetut
+ja hyväksytyt kuvaustekstit. Sen sijaan kannattaa käyttää:
+
+```r
+# Tarkista nopeasti (ei LLM-kutsua) onko dokumentaatio ajan tasalla:
+sd_check_documentation_current(aineisto, "survey_data")
+```
+
+Jos uusia, dokumentoimattomia muuttujia löytyy, `sd_update_roxygen()` pyytää
+LLM:ltä kuvaukset VAIN niille -- otsikko, `@details`, `@source` ja aiemmin
+dokumentoidut muuttujat pysyvät koskemattomina, ja `@format`-rivin
+muuttujamäärä päivittyy automaattisesti:
+
+```r
+# aineisto sisältää nyt esim. uuden summamuuttujan "tt_mean":
+paivitys <- sd_update_roxygen(aineisto, "survey_data")   # dry_run = TRUE oletuksena
+print(paivitys)   # tarkista lisätyt kuvaukset ennen tallennusta
+
+# Kun teksti näyttää hyvältä:
+sd_update_roxygen(aineisto, "survey_data", dry_run = FALSE)
+devtools::document()
+```
+
+`dry_run = FALSE` ottaa aina varmuuskopion vanhasta tiedostosta
+(`R/survey_data.R.bak`) ennen kirjoittamista, joten päivityksen voi perua
+palauttamalla varmuuskopion. Uudet muuttujat tunnistetaan automaattisesti
+vertaamalla aineiston muuttujia jo dokumentoituihin -- jos haluat kuvata
+muuttujat itse valitsemassasi järjestyksessä tai automaattinen tunnistus ei
+onnistu (esim. hyvin käsin muokattu tiedosto), anna ne `new_vars`-parametrilla:
+
+```r
+sd_update_roxygen(aineisto, "survey_data", new_vars = c("tt_mean", "tt_luokka"))
+```
+
+Myös `sd_update_roxygen()` hyväksyy `language`-parametrin, samaan tapaan kuin
+`sd_generate_roxygen()` (ks. edellä) -- sen kannattaa normaalisti täsmätä
+tiedoston jo olemassa olevan tekstin kielen kanssa.
+
+Tämä toimintopari (`sd_check_documentation_current()`/`sd_update_roxygen()`)
+koskee vain UUSIA MUUTTUJIA. Tilanteeseen jossa muuttujat pysyvät samoina
+mutta aineistoon tulee lisää rivejä (vastaajia), ks. seuraava Vaihe 5c.
+
+## Vaihe 5c: Kun aineistoon tulee uusia rivejä (vastaajia)
+
+Vastaava tilanne voi syntyä myös toisin päin: muuttujat pysyvät samoina,
+mutta aineistoon lisätään uusia rivejä (esim. uusi kyselykierros samoilla
+kysymyksillä). Tällöin `\describe{}`-lohkoon ei tarvitse lisätä mitään --
+vain roxygen2-tiedoston `@format`-rivillä oleva rivimäärä (esim. "...
+jossa 200 riviä ja 17 muuttujaa:") jää vanhaksi. `sd_check_row_count()` ja
+`sd_update_row_count()` hoitavat tämän täysin ilman LLM-kutsua -- toisin
+kuin muuttujan kuvausteksti, rivimäärällä on aina tarkalleen yksi oikea
+arvo, joten sitä ei tarvitse pyytää mallilta:
+
+```r
+# Tarkista nopeasti (ei LLM-kutsua) täsmääkö dokumentoitu rivimäärä dataan:
+sd_check_row_count(aineisto, "survey_data")
+
+# Jos ei täsmää, korjaa @format-rivi:
+paivitys <- sd_update_row_count(aineisto, "survey_data")   # dry_run = TRUE oletuksena
+print(paivitys)   # tarkista muutos ennen tallennusta
+
+# Kun näyttää hyvältä:
+sd_update_row_count(aineisto, "survey_data", dry_run = FALSE)
+devtools::document()
+```
+
+Kuten `sd_update_roxygen()`, myös `sd_update_row_count()` ottaa aina
+varmuuskopion (`.bak`) ennen kirjoittamista kun `dry_run = FALSE`.
+
+Huomaa, että `sd_update_row_count()` päivittää VAIN roxygen2-tiedoston
+`@format`-rivin -- se ei koske `sd_document()`-kuvaustekstiin. Koska
+`sd_document()`:n teksti (esim. vastaajamäärä, jakaumat) laaditaan LLM:llä
+koko aineiston perusteella eikä sitä voi päivittää lisäämällä siihen
+palasia (kuten uusien muuttujien kuvaukset voidaan), sen päivittäminen jää
+tarkoituksella käsin tehtäväksi -- aja `sd_document()` uudelleen jos
+rivimäärän muutos on merkittävä.
+
+## Vaihe 6: Koodikirja
+
+```r
+koodikirja <- sd_codebook(aineisto)
+koodikirja$file   # polku valmiiseen HTML-koodikirjaan (inst/codebook/codebook.html)
+```
+
+`sd_codebook()` tunnistaa automaattisesti Likert-asteikon osioista muodostetut
+summamuuttujaryhmät yhteisen nimien etuliitteen perusteella (esim.
+`tt1`, `tt2`, `tt3` → ryhmä `"tt"`). Voit ohittaa automaattitunnistuksen
+`groups`-parametrilla, jos oma nimeämiskäytäntösi on erilainen.
+
+## Vaihe 7: pkgdown-dokumentaatiosivusto (valinnainen mutta suositeltava)
+
+```r
+usethis::use_pkgdown()
+usethis::use_readme_rmd()      # muokkaa README.Rmd haluamaksesi
+devtools::build_readme()
+```
+
+Muokkaa tarvittaessa juureen syntynyttä `_pkgdown.yml`-tiedostoa, esim.:
+
+```yaml
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  title: "Minun Surveyni"
+
+home:
+  title: "MinunSurveyni"
+  description: "Kyselyaineiston dokumentaatio ja aineiston kuvaus"
+```
+
+Rakenna ja esikatsele sivusto:
+
+```r
+pkgdown::build_site()
+pkgdown::preview_site()
+
+# Voit rakentaa myös vain osia:
+pkgdown::build_reference()   # vain ?-ohjesivut
+pkgdown::build_home()        # vain etusivu (README)
+```
+
+## Vaihe 8: Julkaisu (valinnainen)
+
+**GitHub Pages:**
+
+```r
+usethis::use_git()
+usethis::use_github()
+usethis::use_pkgdown_github_pages()
+```
+
+Jatkossa sivusto päivittyy komennoilla `pkgdown::build_site()`, `git add docs/`,
+`git commit`, `git push`.
+
+**Ilman GitHubiä (verkkoasema / SharePoint):** `docs/`-kansio on tavallinen
+staattinen HTML-sivusto — kopioi se sellaisenaan haluamaasi paikkaan, tai zippaa
+jakelua varten `zip("dokumentaatio.zip", "docs")`.
+
+## Miksi nämä vaiheet eivät ole SurveyDokumin omia funktioita
+
+Paketin luonti (`usethis::create_package()`) ja dokumentaatiosivuston
+rakentaminen (`pkgdown::build_site()`) eivät ole surveyaineistolle ominaisia
+vaiheita — ne ovat yleiskäyttöisiä R-paketinkehitystoimintoja, jotka usethis ja
+pkgdown jo hoitavat hyvin. SurveyDokumin oma lisäarvo on nimenomaan
+survey-spesifisissä vaiheissa: muuttujaroolien tunnistuksessa, tilastojen
+laskennassa, LLM-pohjaisessa dokumentoinnissa ja koodikirjan generoinnissa —
+näitä varten on olemassa `sd_`-funktiot. Tämä pitää SurveyDokumin ytimen pienenä
+ja keskittyneenä, eikä toisintoa jo olemassa olevista, hyvin toimivista
+työkaluista.
+
+## Yhteenveto — kaikki komennot peräkkäin
+
+```r
+library(usethis)
+library(devtools)
+library(SurveyDokum)
+
+# 1. Pakettipohja
+usethis::create_package("polku/MinunSurveyni")
+
+# --- jatka uudessa ikkunassa ---
+
+# 2. Kansiorakenne
+usethis::use_data_raw("aineisto")
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+
+# 3. Aineiston luku ja valmistelu
+aineisto <- sd_read("data-raw/aineistoni.sav")
+aineisto <- sd_set_missing(aineisto, codes = c(-9, -1))
+aineisto <- sd_detect_roles(aineisto)
+yhteenveto <- sd_summarise(aineisto)
+
+# 4. Tallennus pakettiin
+survey_data <- sd_get_data(aineisto)
+usethis::use_data(survey_data, overwrite = TRUE)
+
+# 5. Dokumentaatio
+sd_document(aineisto, save_to = "inst/methodology/kuvaus.txt")
+sd_generate_roxygen(aineisto, "survey_data", dry_run = FALSE)
+devtools::document()
+
+# 6. Koodikirja
+sd_codebook(aineisto)
+
+# 7. pkgdown-sivusto
+usethis::use_pkgdown()
+usethis::use_readme_rmd()
+devtools::build_readme()
+pkgdown::build_site()
+```

@@ -1,0 +1,35 @@
+Package: SurveyDokum
+Title: Automated Documentation for Survey Datasets
+Version: 0.0.0.9000
+Authors@R: 
+    person("Maria", "Valaste", , "maria.valaste@helsinki.fi", role = c("aut", "cre"))
+Description: Automates the documentation of survey datasets through a
+    two-stage pipeline: R computes descriptive statistics and detects
+    variable roles natively, then a local large language model (via
+    'Ollama') turns those statistics into readable prose. Also generates
+    'roxygen2' data documentation and 'codebook' reports automatically.
+    Open-text survey responses are never included in prompts sent to the
+    language model, only aggregate statistics about them.
+License: MIT + file LICENSE
+Encoding: UTF-8
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+Depends: 
+    R (>= 3.5)
+LazyData: true
+Imports: 
+    stats,
+    tibble
+Suggests: 
+    ellmer,
+    ragnar,
+    haven,
+    DDIwR,
+    readxl,
+    codebook,
+    rmarkdown,
+    knitr,
+    testthat (>= 3.1.4),
+    writexl
+Config/roxygen2/version: 8.1.0
+Config/testthat/edition: 3

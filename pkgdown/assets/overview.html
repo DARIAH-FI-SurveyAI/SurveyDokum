@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>SurveyDokum at a Glance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column; main diagram as a left-to-right pipeline with a visible boundary between the R stage and the LLM stage */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --ink:#15202a; --muted:#56636f; --line:#d5dce1;
+  --accent:#1d5b86; --accent-soft:#e2edf5;
+  --llm:#8a5a12; --llm-soft:#f7eedd;
+  --ok:#2c6e49; --no:#a33a2a;
+  --r-id:#6b7280; --r-nominal:#2f6f9f; --r-likert:#2c7a5b; --r-cont:#7a4fa3; --r-text:#b0602a; --r-date:#9a7d10; --r-weight:#b03a6a; --r-unknown:#9aa3ab;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#18212a; --ink:#e4e9ee; --muted:#9aa7b3; --line:#2c3843;
+  --accent:#7db5de; --accent-soft:#1b3246;
+  --llm:#e2b26a; --llm-soft:#33291a;
+  --ok:#7cc79a; --no:#ee8a78;
+  --r-id:#9aa3ab; --r-nominal:#6fa9d6; --r-likert:#6cc39c; --r-cont:#b495d8; --r-text:#e39a64; --r-date:#d4b84a; --r-weight:#e07aa3; --r-unknown:#6b7680;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#18212a; --ink:#e4e9ee; --muted:#9aa7b3; --line:#2c3843;
+  --accent:#7db5de; --accent-soft:#1b3246;
+  --llm:#e2b26a; --llm-soft:#33291a;
+  --ok:#7cc79a; --no:#ee8a78;
+  --r-id:#9aa3ab; --r-nominal:#6fa9d6; --r-likert:#6cc39c; --r-cont:#b495d8; --r-text:#e39a64; --r-date:#d4b84a; --r-weight:#e07aa3; --r-unknown:#6b7680;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--f-body)}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:40px 64px;display:flex;flex-direction:column;gap:64px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3vw,2rem);letter-spacing:-.01em}
+h3{font-size:1.1rem;font-weight:500}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+.eyebrow{font:500 .75rem/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:20px}
+.lede{font-size:1.15rem;color:var(--ink)}
+.muted{color:var(--muted)}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:40px;align-items:end}
+.hero-text{display:flex;flex-direction:column;gap:16px;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.fact{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.fact b{font:700 1.6rem/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.fact span{font-size:.85rem;color:var(--muted)}
+/* likert motif */
+.scale{display:flex;gap:4px;align-items:flex-end;height:28px}
+.scale i{display:block;width:14px;background:var(--accent);border-radius:2px;opacity:.85}
+
+/* Pipeline */
+.pipe-scroll{overflow-x:auto}
+.pipe{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 18px repeat(2,minmax(0,1fr));gap:12px;min-width:860px;align-items:stretch}
+.zone-label{grid-row:1;font:500 .75rem/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border-radius:4px}
+.zone-r{grid-column:1/4;background:var(--accent-soft);color:var(--accent)}
+.zone-llm{grid-column:5/7;background:var(--llm-soft);color:var(--llm)}
+.stage{grid-row:2;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage.llm{border-color:color-mix(in srgb,var(--llm) 45%,var(--line))}
+.stage .n{font:500 .72rem/1 var(--f-mono);color:var(--muted)}
+.stage h3{font-size:1.05rem}
+.stage p{font-size:.86rem;color:var(--muted);line-height:1.45}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+.chip{font:500 .76rem/1.2 var(--f-mono);padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--accent)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.stage.llm .chip[aria-pressed="true"]{background:var(--llm);border-color:var(--llm)}
+.chip.opt{border-style:dashed}
+.boundary{grid-row:1/3;grid-column:4;display:flex;flex-direction:column;align-items:center;gap:6px}
+.boundary .bar{flex:1;width:0;border-left:2px dashed var(--llm)}
+.boundary .lock{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .7rem/1 var(--f-mono);letter-spacing:.06em;color:var(--llm);text-transform:uppercase;white-space:nowrap}
+.flow-note{grid-row:3;font-size:.8rem;color:var(--muted)}
+.fn1{grid-column:1/4}.fn2{grid-column:5/7}
+
+/* Detail panel */
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+.detail > div{min-width:0;display:flex;flex-direction:column;gap:10px}
+.detail h3{font-family:var(--f-mono);font-size:1.05rem;font-weight:500}
+.tag{display:inline-block;font:500 .7rem/1 var(--f-mono);padding:4px 7px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase;margin-right:6px}
+.tag.r{background:var(--accent-soft);color:var(--accent)}
+.tag.l{background:var(--llm-soft);color:var(--llm)}
+.tag.w{background:transparent;border:1px solid var(--line);color:var(--muted)}
+pre{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;font:400 .82rem/1.55 var(--f-mono);color:var(--ink)}
+pre .c{color:var(--muted)}
+
+/* Privacy */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.panel li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;font-size:.93rem}
+.yes::before{content:"✓";color:var(--ok);font-weight:600}
+.nope::before{content:"✕";color:var(--no);font-weight:600}
+.panel h3{display:flex;gap:8px;align-items:center}
+
+/* Roles */
+.strip{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px}
+.var{height:74px;border-radius:3px;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px}
+.var span{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .7rem/1 var(--f-mono);color:var(--surface);white-space:nowrap}
+.brackets{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px;font:500 .72rem/1.2 var(--f-mono);color:var(--muted)}
+.brackets div{border-top:1.5px solid var(--muted);padding-top:4px;text-align:center}
+.roles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.role{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.role b{font:500 .85rem/1 var(--f-mono);display:flex;align-items:center;gap:8px}
+.role b::before{content:"";width:12px;height:12px;border-radius:2px;background:var(--c)}
+.role p{font-size:.83rem;color:var(--muted);line-height:1.45}
+
+/* Outputs */
+.outs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.out{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.out .file{font:500 .8rem/1.3 var(--f-mono);color:var(--accent);word-break:break-all}
+.out p{font-size:.88rem;color:var(--muted);line-height:1.5}
+.out .by{font:400 .76rem/1.3 var(--f-mono);color:var(--muted);margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
+.out.ext{background:transparent;border-style:dashed}
+
+/* Maintenance decision */
+.decide{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.q{font:700 1.05rem/1.3 var(--f-display)}
+.steps{display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:6px}
+.steps div{position:relative;padding:0 0 14px 18px;font-size:.9rem}
+.steps div::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.steps div.l::before{border-color:var(--llm)}
+.steps div:last-child{padding-bottom:0}
+.note{font-size:.9rem;color:var(--muted);border-left:3px solid var(--line);padding-left:14px}
+
+footer{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+
+@media (max-width:760px){
+  .hero,.split,.decide,.detail{grid-template-columns:minmax(0,1fr)}
+  .roles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .outs{grid-template-columns:minmax(0,1fr)}
+  .var{height:64px}
+  .brackets{font-size:.6rem}
+}
+@media (prefers-reduced-motion:no-preference){ .chip{transition:background .15s,border-color .15s} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="hero-text">
+    <div class="scale" aria-hidden="true"><i style="height:30%"></i><i style="height:55%"></i><i style="height:100%"></i><i style="height:70%"></i><i style="height:40%"></i></div>
+    <span class="eyebrow">R package · version 0.0.0.9000 · in development · <a href="yleiskuva.html" style="color:var(--accent)">Suomeksi</a> · <a href="oversikt.html" style="color:var(--accent)">På svenska</a></span>
+    <h1>SurveyDokum</h1>
+    <p class="lede">Semi-automated documentation for survey datasets. R computes the descriptive statistics and detects each variable's type, and a language model running on your own machine turns them into a readable description, a help page and a codebook.</p>
+    <p class="muted">This page shows what the package is made of and in which order its parts are used. Author: Maria Valaste, University of Helsinki.</p>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>20</b><span>user-facing functions, all prefixed <code>sd_</code></span></div>
+    <div class="fact"><b>3</b><span>output languages: Finnish, English, Swedish</span></div>
+    <div class="fact"><b>7</b><span>input formats: csv, tsv, xlsx, xls, sav, dta, rds</span></div>
+    <div class="fact"><b>137</b><span>automated tests (testthat)</span></div>
+  </div>
+</header>
+
+<section id="pipeline">
+  <span class="eyebrow">Workflow</span>
+  <h2>Five steps from raw data to finished documentation</h2>
+  <p>The design has two stages. First R does all the computation and checking, then a language model writes prose from the results. The model never calculates anything and never sees the raw data. Select a function to see what it does.</p>
+  <div class="pipe-scroll">
+    <div class="pipe" role="group" aria-label="SurveyDokum workflow">
+      <div class="zone-label zone-r">R computes · same result every time</div>
+      <div class="boundary" aria-hidden="true"><span class="bar"></span><span class="lock">statistics only</span><span class="bar"></span></div>
+      <div class="zone-label zone-llm">Language model writes · local Ollama</div>
+
+      <div class="stage" style="grid-column:1">
+        <span class="n">1 · READ</span>
+        <h3>Load the data</h3>
+        <p>The file becomes an <code>sd_data</code> object: the data and its metadata (roles, labels, missing-value codes) travel together.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_read">sd_read</button>
+          <button class="chip" data-fn="sd_get_data">sd_get_data</button>
+          <button class="chip" data-fn="sd_get_meta">sd_get_meta</button>
+        </div>
+      </div>
+
+      <div class="stage" style="grid-column:2">
+        <span class="n">2 · PREPARE</span>
+        <h3>Clean and classify</h3>
+        <p>Missing-value codes (e.g. −9, 99) are flagged, and each variable gets a guessed role. You can correct any guess by hand.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_set_missing">sd_set_missing</button>
+          <button class="chip" data-fn="sd_detect_roles">sd_detect_roles</button>
+          <button class="chip" data-fn="sd_set_role">sd_set_role</button>
+        </div>
+      </div>
+
+      <div class="stage" style="grid-column:3">
+        <span class="n">3 · SUMMARISE</span>
+        <h3>Compute statistics</h3>
+        <p>By role: distributions, means, frequencies. For open-ended answers, only length and counts.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_summarise">sd_summarise</button>
+          <button class="chip" data-fn="sd_codebook">sd_codebook</button>
+          <button class="chip" data-fn="sd_export_ddi">sd_export_ddi</button>
+        </div>
+      </div>
+
+      <div class="stage llm" style="grid-column:5">
+        <span class="n">4 · WRITE</span>
+        <h3>Description and help page</h3>
+        <p>The statistics are formatted into a prompt, and the model writes text from them in the chosen language.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_check_ollama">sd_check_ollama</button>
+          <button class="chip" data-fn="sd_document">sd_document</button>
+          <button class="chip" data-fn="sd_generate_roxygen">sd_generate_roxygen</button>
+          <button class="chip opt" data-fn="sd_retrieve_context">sd_retrieve_context</button>
+        </div>
+      </div>
+
+      <div class="stage llm" style="grid-column:6">
+        <span class="n">5 · KEEP CURRENT</span>
+        <h3>Update when data changes</h3>
+        <p>New variables get descriptions while approved text stays untouched. Row counts are fixed without the model.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_update_roxygen">sd_update_roxygen</button>
+          <button class="chip" data-fn="sd_update_row_count">sd_update_row_count</button>
+        </div>
+      </div>
+
+      <div class="flow-note fn1">The codebook (<code>sd_codebook</code>) and DDI export (<code>sd_export_ddi</code>) are produced directly in R, with no language model.</div>
+      <div class="flow-note fn2">Dashed: optional RAG context from your own reference material.</div>
+    </div>
+  </div>
+
+  <div class="detail" id="detail" aria-live="polite">
+    <div>
+      <div id="d-tags"></div>
+      <h3 id="d-name"></h3>
+      <p id="d-desc"></p>
+      <p id="d-extra" class="muted"></p>
+    </div>
+    <div>
+      <span class="eyebrow">Example</span>
+      <pre id="d-code"></pre>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <span class="eyebrow">Privacy</span>
+  <h2>What the language model sees, and what it never sees</h2>
+  <p>The model runs on your own machine through Ollama, so nothing is sent to an external service. On top of that, the model only receives the statistics R has computed. The content of open-ended answers always stays out of the prompt.</p>
+  <div class="split">
+    <div class="panel">
+      <h3>Goes into the prompt</h3>
+      <ul>
+        <li class="yes">Variable name, label and detected role</li>
+        <li class="yes">Frequencies and value labels for Likert and categorical variables</li>
+        <li class="yes">Mean, standard deviation, min and max for continuous variables</li>
+        <li class="yes">For open-ended answers: average length in characters, number of distinct answers and number missing</li>
+        <li class="yes">Optionally: excerpts from your own reference material (RAG)</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Never goes in</h3>
+      <ul>
+        <li class="nope">Individual response rows</li>
+        <li class="nope">The text of open-ended answers, not even as quotes</li>
+        <li class="nope">Respondent ID values</li>
+      </ul>
+      <p class="muted" style="font-size:.88rem">Model output is always reviewed before it is saved: the functions that write files run in preview mode by default (<code>dry_run = TRUE</code>).</p>
+    </div>
+  </div>
+</section>
+
+<section id="roles">
+  <span class="eyebrow">Variable roles</span>
+  <h2>Every variable gets a role, and the role decides what is computed</h2>
+  <p>Below is the package's example dataset <code>survey_data</code>: a workplace wellbeing survey with 200 respondents and 17 variables, coloured by detected role. The codebook treats Likert items that share a name prefix as one scale. The variable names are Finnish, as in the original data.</p>
+  <div class="pipe-scroll">
+    <div style="min-width:560px;display:flex;flex-direction:column;gap:6px">
+      <div class="strip" id="strip"></div>
+      <div class="brackets">
+        <div style="grid-column:7/11">tt · 4 items</div>
+        <div style="grid-column:11/14">joh · 3</div>
+        <div style="grid-column:14/17">imu · 3</div>
+      </div>
+    </div>
+  </div>
+  <div class="roles">
+    <div class="role" style="--c:var(--r-id)"><b>id</b><p>Name contains <code>id</code> or <code>tunnus</code>, or every value is unique.</p></div>
+    <div class="role" style="--c:var(--r-nominal)"><b>nominal</b><p>Text or factor variable with repeated values.</p></div>
+    <div class="role" style="--c:var(--r-likert)"><b>likert</b><p>Whole numbers, 2–11 distinct values, range of 10 or less.</p></div>
+    <div class="role" style="--c:var(--r-cont)"><b>continuous</b><p>Any other numeric variable.</p></div>
+    <div class="role" style="--c:var(--r-text)"><b>text</b><p>Over half the values unique, or average length over 30 characters.</p></div>
+    <div class="role" style="--c:var(--r-date)"><b>date</b><p>Column is a date or timestamp type.</p></div>
+    <div class="role" style="--c:var(--r-weight)"><b>weight</b><p>Numeric, with <code>paino</code>, <code>weight</code> or <code>wt</code> in the name.</p></div>
+    <div class="role" style="--c:var(--r-unknown)"><b>unknown</b><p>None of the above.</p></div>
+  </div>
+  <p class="note">Order matters: run <code>sd_set_missing()</code> before <code>sd_detect_roles()</code>. Otherwise a code such as 99 stretches the range of a 1–5 scale, and the Likert item is classified as continuous.</p>
+</section>
+
+<section id="outputs">
+  <span class="eyebrow">What you get</span>
+  <h2>Outputs and where they are saved</h2>
+  <p>Each dataset you document gets its own small R package. SurveyDokum fills in its contents, while the package skeleton and the website come from the standard usethis and pkgdown tools.</p>
+  <div class="outs">
+    <div class="out">
+      <span class="tag l">language model</span>
+      <h3>Dataset description</h3>
+      <span class="file">inst/methodology/kuvaus.txt</span>
+      <p>A readable prose description for methodology documentation. You can ask the model follow-up questions in the same conversation.</p>
+      <span class="by">sd_document()</span>
+    </div>
+    <div class="out">
+      <span class="tag l">language model</span>
+      <h3>R help page</h3>
+      <span class="file">R/survey_data.R → ?survey_data</span>
+      <p>roxygen2 documentation describing every variable with its type and missing values.</p>
+      <span class="by">sd_generate_roxygen()</span>
+    </div>
+    <div class="out">
+      <span class="tag r">R</span>
+      <h3>HTML codebook</h3>
+      <span class="file">inst/codebook/codebook.html</span>
+      <p>Per-variable distribution plots, scale reliabilities and value labels, built with the codebook package.</p>
+      <span class="by">sd_codebook()</span>
+    </div>
+    <div class="out">
+      <span class="tag r">R</span>
+      <h3>DDI codebook</h3>
+      <span class="file">codebook.xml</span>
+      <p>Machine-readable DDI Codebook 2.6 description for data archiving and metadata catalogues. Metadata only, no data values.</p>
+      <span class="by">sd_export_ddi()</span>
+    </div>
+    <div class="out ext">
+      <span class="tag w">usethis</span>
+      <h3>Data package</h3>
+      <span class="file">data/survey_data.rda</span>
+      <p>The cleaned data is stored in the package, so it loads with a single <code>library()</code> call.</p>
+      <span class="by">usethis::use_data()</span>
+    </div>
+    <div class="out ext">
+      <span class="tag w">pkgdown</span>
+      <h3>Documentation website</h3>
+      <span class="file">docs/</span>
+      <p>A static website that brings together the help pages and guides. Publish on GitHub Pages or copy to a network drive.</p>
+      <span class="by">pkgdown::build_site()</span>
+    </div>
+  </div>
+</section>
+
+<section id="updates">
+  <span class="eyebrow">Maintenance</span>
+  <h2>When the data changes</h2>
+  <p>There is no need to regenerate everything, which would throw away text you have already reviewed. First check quickly what has changed, then update only that.</p>
+  <div class="decide">
+    <div class="panel">
+      <span class="q">New variables?</span>
+      <p class="muted" style="font-size:.9rem">For example a scale score such as <code>tt_mean</code>, or questions from a new wave.</p>
+      <div class="steps">
+        <div><code>sd_check_documentation_current()</code> lists undocumented variables. No language model.</div>
+        <div class="l"><code>sd_update_roxygen()</code> asks for descriptions of the new variables only. Existing descriptions, the title and <code>@details</code> stay as they are.</div>
+        <div>The variable count on the <code>@format</code> line is updated, and the old file is kept as a <code>.bak</code> backup.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <span class="q">More respondents?</span>
+      <p class="muted" style="font-size:.9rem">Same questions, a new survey round.</p>
+      <div class="steps">
+        <div><code>sd_check_row_count()</code> compares the documented row count with the data. No language model.</div>
+        <div><code>sd_update_row_count()</code> fixes the number on the <code>@format</code> line. A row count has one correct value, so no model is needed.</div>
+        <div>If the change is large, rerun <code>sd_document()</code>, since the description is based on the whole dataset.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <span class="eyebrow">Quick start</span>
+  <h2>The whole path at a glance</h2>
+  <p>You need R, the packages usethis, devtools, roxygen2 and pkgdown, plus ellmer, haven, readxl and codebook. The language-model steps also need <a href="https://ollama.com/" style="color:var(--accent)">Ollama</a> with a model pulled, for example <code>ollama pull gemma3:12b</code>. Detailed guides ship with the package in Finnish, English and Swedish.</p>
+<pre><span class="c"># 1. A new package for the dataset (opens in a new RStudio window)</span>
+usethis::create_package("path/MySurvey")
+usethis::use_data_raw("aineisto")
+
+<span class="c"># 2. Read, clean and detect roles</span>
+library(SurveyDokum)
+aineisto &lt;- sd_read("data-raw/my_data.sav")
+aineisto &lt;- sd_set_missing(aineisto, codes = c(-9, -1))
+aineisto &lt;- sd_detect_roles(aineisto)
+sd_summarise(aineisto)                         <span class="c"># check the statistics</span>
+
+<span class="c"># 3. Store the data in the package</span>
+survey_data &lt;- sd_get_data(aineisto)
+usethis::use_data(survey_data, overwrite = TRUE)
+
+<span class="c"># 4. The language model writes (review before saving)</span>
+sd_document(aineisto, language = "en",
+            save_to = "inst/methodology/description.txt")
+sd_generate_roxygen(aineisto, "survey_data", language = "en",
+                    dry_run = FALSE)
+devtools::document()
+
+<span class="c"># 5. Codebooks and website</span>
+sd_codebook(aineisto)
+sd_export_ddi(aineisto, file = "codebook.xml")
+pkgdown::build_site()</pre>
+</section>
+
+<footer>SurveyDokum · MIT licence · core dependencies are only stats and tibble; ellmer, ragnar, haven, readxl, codebook and DDIwR are optional. Based on the package source code, help pages and getting-started guide as of September 2026.</footer>
+</div>
+
+<script>
+const FN = {
+  sd_read:{t:["r"],d:"Reads a data file and returns an sd_data object. The format is inferred from the file extension: csv, tsv, xlsx, xls, sav, dta or rds. Variable and value labels from SPSS and Stata files are picked up into the metadata automatically.",x:"Every other function takes this object as input.",c:'aineisto <- sd_read("data-raw/survey.sav")\nprint(aineisto)'},
+  sd_get_data:{t:["r"],d:"Returns the data inside an sd_data object as a plain tibble, for example to store it in a package.",x:"Counterparts: sd_get_meta() returns the metadata, and is_sd_data() checks the object type.",c:'survey_data <- sd_get_data(aineisto)\nusethis::use_data(survey_data, overwrite = TRUE)'},
+  sd_get_meta:{t:["r"],d:"Returns the metadata: roles, variable labels, value labels, missing-value codes and paradata (collection mode, fieldwork period, response rate).",x:"The metadata travels alongside the data through the whole pipeline.",c:'meta <- sd_get_meta(aineisto)\nmeta$roles\nmeta$missing_codes'},
+  sd_set_missing:{t:["r"],d:"Marks the given codes as missing, either for all variables or selected ones. The original codes are kept in the metadata, so the DDI export can flag them as missing categories.",x:"Run this before detecting roles.",c:'aineisto <- sd_set_missing(\n  aineisto, codes = c(99, -9),\n  vars = c("tt1", "tt2")\n)'},
+  sd_detect_roles:{t:["r"],d:"Guesses a role for each variable using simple rules: data type, number and range of values, and name pattern. Possible roles are id, nominal, likert, continuous, text, date, weight and unknown.",x:"The result is a starting point, not a guarantee. A count such as number of children can look like a Likert item.",c:'aineisto <- sd_detect_roles(aineisto)\naineisto$meta$roles'},
+  sd_set_role:{t:["r"],d:"Sets a single variable's role by hand when the automatic guess is wrong.",x:"",c:'aineisto <- sd_set_role(aineisto, "children", "continuous")'},
+  sd_summarise:{t:["r"],d:"Computes role-appropriate statistics for every variable: mean, standard deviation and range for continuous variables, frequencies for Likert and categorical ones, and only average length and number of distinct answers for open-ended text.",x:"This same summary is what the language model later gets to see.",c:'summary <- sd_summarise(aineisto)\nprint(summary)'},
+  sd_codebook:{t:["r"],d:"Produces an HTML codebook with the codebook package: distribution plots, value labels and scale reliabilities. Likert items are grouped into scales by their shared name prefix (tt1, tt2, tt3 → tt).",x:"You can pass your own grouping with the groups argument. The helper sd_prepare_codebook_data() prepares the data.",c:'cb <- sd_codebook(aineisto)\ncb$file\n#> "inst/codebook/codebook.html"'},
+  sd_export_ddi:{t:["r"],d:"Writes the metadata to an XML file following the DDI Codebook 2.6 standard, using the DDIwR package. The file includes variables, role-based formats, value labels and codes marked as missing.",x:"Metadata only, no data values. Suitable for archiving and metadata catalogues.",c:'sd_export_ddi(\n  aineisto, file = "codebook.xml",\n  title = "Workplace Wellbeing Survey 2024"\n)'},
+  sd_check_ollama:{t:["l"],d:"Quickly checks that Ollama is running and the chosen model has been pulled, before starting a slow generation.",x:"The default model is gemma3:12b at localhost:11434.",c:'sd_check_ollama(model = "gemma3:12b")'},
+  sd_document:{t:["l"],d:"Writes a readable description of the dataset. It computes the statistics, builds the prompt (sd_build_prompt) and sends it to the local model. The output language is set with the language argument: fi, en or sv.",x:"Also returns a chat object you can ask follow-up questions in the same context. With a local model a response can take several minutes.",c:'doc <- sd_document(aineisto, language = "en")\nprint(doc)\ndoc$chat$chat("Which dimension had\n  the highest means?")'},
+  sd_generate_roxygen:{t:["l","w"],d:"Writes roxygen2 documentation for the data object, which becomes the R help page ?survey_data with every variable described. The structure (variable list, types, missing counts) comes from R; the model writes the descriptive text.",x:"Preview only by default (dry_run = TRUE). Nothing is written to disk until you have approved the result.",c:'res <- sd_generate_roxygen(aineisto, "survey_data")\nprint(res)\nsd_generate_roxygen(aineisto, "survey_data",\n                    dry_run = FALSE)'},
+  sd_retrieve_context:{t:["l"],d:"Optional RAG layer. For each variable it retrieves background text from your own reference material (e.g. a methodology glossary, earlier codebooks, an in-house style guide) and adds it to the prompt with source references.",x:"SurveyDokum does not build the retrieval store itself; you build it with the ragnar package and pass it as the store argument.",c:'store <- ragnar::ragnar_store_connect(\n  "my_rag_store.ragnar.duckdb")\nsd_document(aineisto, store = store)'},
+  sd_update_roxygen:{t:["l","w"],d:"Adds descriptions only for variables not yet documented. Previously reviewed descriptions, the title and @details are kept, and the variable count on the @format line is updated.",x:"Check first with sd_check_documentation_current(). When writing, the old file is saved as a .bak backup.",c:'sd_check_documentation_current(aineisto, "survey_data")\nsd_update_roxygen(aineisto, "survey_data",\n                  dry_run = FALSE)'},
+  sd_update_row_count:{t:["r","w"],d:"Fixes the row count on the roxygen @format line when new respondents have been added. Uses no language model, since the correct number comes straight from the data.",x:"Check first with sd_check_row_count(). Writing creates a .bak backup.",c:'sd_check_row_count(aineisto, "survey_data")\nsd_update_row_count(aineisto, "survey_data",\n                    dry_run = FALSE)'}
+};
+const TAG={r:'<span class="tag r">R</span>',l:'<span class="tag l">language model</span>',w:'<span class="tag w">preview first</span>'};
+const chips=[...document.querySelectorAll('.chip')];
+function show(name){
+  const f=FN[name]; if(!f) return;
+  chips.forEach(c=>c.setAttribute('aria-pressed',c.dataset.fn===name?'true':'false'));
+  document.getElementById('d-tags').innerHTML=f.t.map(k=>TAG[k]).join('');
+  document.getElementById('d-name').textContent=name+'()';
+  document.getElementById('d-desc').textContent=f.d;
+  const ex=document.getElementById('d-extra'); ex.textContent=f.x; ex.hidden=!f.x;
+  document.getElementById('d-code').textContent=f.c;
+}
+chips.forEach(c=>c.addEventListener('click',()=>show(c.dataset.fn)));
+show('sd_document');
+
+const VARS=[["vastaaja_id","id"],["ika_luokka","nominal"],["sukupuoli","nominal"],["koulutus","nominal"],["tyosuhde","nominal"],["tyovuodet","cont"],["tt1","likert"],["tt2","likert"],["tt3","likert"],["tt4","likert"],["joh1","likert"],["joh2","likert"],["joh3","likert"],["imu1","likert"],["imu2","likert"],["imu3","likert"],["avoin_palaute","text"]];
+document.getElementById('strip').innerHTML=VARS.map(([n,r])=>`<div class="var" style="background:var(--r-${r})" title="${n}: ${r==='cont'?'continuous':r}"><span>${n}</span></div>`).join('');
+</script>
+</body>
+</html>

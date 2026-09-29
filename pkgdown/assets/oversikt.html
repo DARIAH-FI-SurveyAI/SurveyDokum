@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>SurveyDokum i korthet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: en lässpalt; huvuddiagrammet som ett flöde från vänster till höger med synlig gräns mellan R-steget och språkmodellsteget */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --ink:#15202a; --muted:#56636f; --line:#d5dce1;
+  --accent:#1d5b86; --accent-soft:#e2edf5;
+  --llm:#8a5a12; --llm-soft:#f7eedd;
+  --ok:#2c6e49; --no:#a33a2a;
+  --r-id:#6b7280; --r-nominal:#2f6f9f; --r-likert:#2c7a5b; --r-cont:#7a4fa3; --r-text:#b0602a; --r-date:#9a7d10; --r-weight:#b03a6a; --r-unknown:#9aa3ab;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#18212a; --ink:#e4e9ee; --muted:#9aa7b3; --line:#2c3843;
+  --accent:#7db5de; --accent-soft:#1b3246;
+  --llm:#e2b26a; --llm-soft:#33291a;
+  --ok:#7cc79a; --no:#ee8a78;
+  --r-id:#9aa3ab; --r-nominal:#6fa9d6; --r-likert:#6cc39c; --r-cont:#b495d8; --r-text:#e39a64; --r-date:#d4b84a; --r-weight:#e07aa3; --r-unknown:#6b7680;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#18212a; --ink:#e4e9ee; --muted:#9aa7b3; --line:#2c3843;
+  --accent:#7db5de; --accent-soft:#1b3246;
+  --llm:#e2b26a; --llm-soft:#33291a;
+  --ok:#7cc79a; --no:#ee8a78;
+  --r-id:#9aa3ab; --r-nominal:#6fa9d6; --r-likert:#6cc39c; --r-cont:#b495d8; --r-text:#e39a64; --r-date:#d4b84a; --r-weight:#e07aa3; --r-unknown:#6b7680;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--f-body)}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:40px 64px;display:flex;flex-direction:column;gap:64px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3vw,2rem);letter-spacing:-.01em}
+h3{font-size:1.1rem;font-weight:500}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+.eyebrow{font:500 .75rem/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:20px}
+.lede{font-size:1.15rem;color:var(--ink)}
+.muted{color:var(--muted)}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:40px;align-items:end}
+.hero-text{display:flex;flex-direction:column;gap:16px;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.fact{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.fact b{font:700 1.6rem/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.fact span{font-size:.85rem;color:var(--muted)}
+/* likert motif */
+.scale{display:flex;gap:4px;align-items:flex-end;height:28px}
+.scale i{display:block;width:14px;background:var(--accent);border-radius:2px;opacity:.85}
+
+/* Pipeline */
+.pipe-scroll{overflow-x:auto}
+.pipe{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 18px repeat(2,minmax(0,1fr));gap:12px;min-width:860px;align-items:stretch}
+.zone-label{grid-row:1;font:500 .75rem/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border-radius:4px}
+.zone-r{grid-column:1/4;background:var(--accent-soft);color:var(--accent)}
+.zone-llm{grid-column:5/7;background:var(--llm-soft);color:var(--llm)}
+.stage{grid-row:2;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage.llm{border-color:color-mix(in srgb,var(--llm) 45%,var(--line))}
+.stage .n{font:500 .72rem/1 var(--f-mono);color:var(--muted)}
+.stage h3{font-size:1.05rem}
+.stage p{font-size:.86rem;color:var(--muted);line-height:1.45}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+.chip{font:500 .76rem/1.2 var(--f-mono);padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--accent)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.stage.llm .chip[aria-pressed="true"]{background:var(--llm);border-color:var(--llm)}
+.chip.opt{border-style:dashed}
+.boundary{grid-row:1/3;grid-column:4;display:flex;flex-direction:column;align-items:center;gap:6px}
+.boundary .bar{flex:1;width:0;border-left:2px dashed var(--llm)}
+.boundary .lock{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .7rem/1 var(--f-mono);letter-spacing:.06em;color:var(--llm);text-transform:uppercase;white-space:nowrap}
+.flow-note{grid-row:3;font-size:.8rem;color:var(--muted)}
+.fn1{grid-column:1/4}.fn2{grid-column:5/7}
+
+/* Detail panel */
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+.detail > div{min-width:0;display:flex;flex-direction:column;gap:10px}
+.detail h3{font-family:var(--f-mono);font-size:1.05rem;font-weight:500}
+.tag{display:inline-block;font:500 .7rem/1 var(--f-mono);padding:4px 7px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase;margin-right:6px}
+.tag.r{background:var(--accent-soft);color:var(--accent)}
+.tag.l{background:var(--llm-soft);color:var(--llm)}
+.tag.w{background:transparent;border:1px solid var(--line);color:var(--muted)}
+pre{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;font:400 .82rem/1.55 var(--f-mono);color:var(--ink)}
+pre .c{color:var(--muted)}
+
+/* Privacy */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.panel li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;font-size:.93rem}
+.yes::before{content:"✓";color:var(--ok);font-weight:600}
+.nope::before{content:"✕";color:var(--no);font-weight:600}
+.panel h3{display:flex;gap:8px;align-items:center}
+
+/* Roles */
+.strip{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px}
+.var{height:74px;border-radius:3px;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px}
+.var span{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .7rem/1 var(--f-mono);color:var(--surface);white-space:nowrap}
+.brackets{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px;font:500 .72rem/1.2 var(--f-mono);color:var(--muted)}
+.brackets div{border-top:1.5px solid var(--muted);padding-top:4px;text-align:center}
+.roles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.role{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.role b{font:500 .85rem/1 var(--f-mono);display:flex;align-items:center;gap:8px}
+.role b::before{content:"";width:12px;height:12px;border-radius:2px;background:var(--c)}
+.role p{font-size:.83rem;color:var(--muted);line-height:1.45}
+
+/* Outputs */
+.outs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.out{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.out .file{font:500 .8rem/1.3 var(--f-mono);color:var(--accent);word-break:break-all}
+.out p{font-size:.88rem;color:var(--muted);line-height:1.5}
+.out .by{font:400 .76rem/1.3 var(--f-mono);color:var(--muted);margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
+.out.ext{background:transparent;border-style:dashed}
+
+/* Maintenance decision */
+.decide{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.q{font:700 1.05rem/1.3 var(--f-display)}
+.steps{display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:6px}
+.steps div{position:relative;padding:0 0 14px 18px;font-size:.9rem}
+.steps div::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.steps div.l::before{border-color:var(--llm)}
+.steps div:last-child{padding-bottom:0}
+.note{font-size:.9rem;color:var(--muted);border-left:3px solid var(--line);padding-left:14px}
+
+footer{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+
+@media (max-width:760px){
+  .hero,.split,.decide,.detail{grid-template-columns:minmax(0,1fr)}
+  .roles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .outs{grid-template-columns:minmax(0,1fr)}
+  .var{height:64px}
+  .brackets{font-size:.6rem}
+}
+@media (prefers-reduced-motion:no-preference){ .chip{transition:background .15s,border-color .15s} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="hero-text">
+    <div class="scale" aria-hidden="true"><i style="height:30%"></i><i style="height:55%"></i><i style="height:100%"></i><i style="height:70%"></i><i style="height:40%"></i></div>
+    <span class="eyebrow">R-paket · version 0.0.0.9000 · under utveckling · <a href="yleiskuva.html" style="color:var(--accent)">Suomeksi</a> · <a href="overview.html" style="color:var(--accent)">In English</a></span>
+    <h1>SurveyDokum</h1>
+    <p class="lede">Halvautomatisk dokumentation av enkätdata. R beräknar statistiken och identifierar variablernas typ, och en språkmodell som körs på din egen dator gör om resultatet till en läsbar beskrivning, en hjälpsida och en kodbok.</p>
+    <p class="muted">Den här sidan visar vilka delar paketet består av och i vilken ordning de används. Upphovsperson: Maria Valaste, Helsingfors universitet.</p>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>20</b><span>funktioner för användaren, alla med prefixet <code>sd_</code></span></div>
+    <div class="fact"><b>3</b><span>språk för texten: finska, engelska, svenska</span></div>
+    <div class="fact"><b>7</b><span>filformat in: csv, tsv, xlsx, xls, sav, dta, rds</span></div>
+    <div class="fact"><b>137</b><span>automatiska tester (testthat)</span></div>
+  </div>
+</header>
+
+<section id="arbetsflode">
+  <span class="eyebrow">Arbetsflöde</span>
+  <h2>Fem steg från rådata till färdig dokumentation</h2>
+  <p>Idén bygger på två steg. Först gör R alla beräkningar och kontroller, sedan skriver en språkmodell text utifrån resultaten. Modellen räknar alltså aldrig själv och ser aldrig rådatan. Välj en funktion för att se vad den gör.</p>
+  <div class="pipe-scroll">
+    <div class="pipe" role="group" aria-label="SurveyDokums arbetsflöde">
+      <div class="zone-label zone-r">R beräknar · samma resultat varje gång</div>
+      <div class="boundary" aria-hidden="true"><span class="bar"></span><span class="lock">endast nyckeltal</span><span class="bar"></span></div>
+      <div class="zone-label zone-llm">Språkmodellen skriver · lokal Ollama</div>
+
+      <div class="stage" style="grid-column:1">
+        <span class="n">1 · LÄS IN</span>
+        <h3>Ladda datan</h3>
+        <p>Filen blir ett <code>sd_data</code>-objekt: datan och dess metadata (roller, etiketter, koder för saknade värden) följs åt.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_read">sd_read</button>
+          <button class="chip" data-fn="sd_get_data">sd_get_data</button>
+          <button class="chip" data-fn="sd_get_meta">sd_get_meta</button>
+        </div>
+      </div>
+
+      <div class="stage" style="grid-column:2">
+        <span class="n">2 · FÖRBERED</span>
+        <h3>Städa och identifiera</h3>
+        <p>Koder för saknade värden (t.ex. −9, 99) markeras, och varje variabel får en gissad roll. Gissningen kan rättas för hand.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_set_missing">sd_set_missing</button>
+          <button class="chip" data-fn="sd_detect_roles">sd_detect_roles</button>
+          <button class="chip" data-fn="sd_set_role">sd_set_role</button>
+        </div>
+      </div>
+
+      <div class="stage" style="grid-column:3">
+        <span class="n">3 · SAMMANFATTA</span>
+        <h3>Beräkna nyckeltal</h3>
+        <p>Enligt roll: fördelningar, medelvärden, frekvenser. För öppna svar endast längd och antal.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_summarise">sd_summarise</button>
+          <button class="chip" data-fn="sd_codebook">sd_codebook</button>
+          <button class="chip" data-fn="sd_export_ddi">sd_export_ddi</button>
+        </div>
+      </div>
+
+      <div class="stage llm" style="grid-column:5">
+        <span class="n">4 · SKRIV</span>
+        <h3>Beskrivning och hjälpsida</h3>
+        <p>Nyckeltalen formuleras som en prompt, och modellen skriver text utifrån dem på valt språk.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_check_ollama">sd_check_ollama</button>
+          <button class="chip" data-fn="sd_document">sd_document</button>
+          <button class="chip" data-fn="sd_generate_roxygen">sd_generate_roxygen</button>
+          <button class="chip opt" data-fn="sd_retrieve_context">sd_retrieve_context</button>
+        </div>
+      </div>
+
+      <div class="stage llm" style="grid-column:6">
+        <span class="n">5 · HÅLL AKTUELL</span>
+        <h3>Uppdatera när datan ändras</h3>
+        <p>Nya variabler får en beskrivning medan godkända texter bevaras. Radantalet rättas utan modell.</p>
+        <div class="chips">
+          <button class="chip" data-fn="sd_update_roxygen">sd_update_roxygen</button>
+          <button class="chip" data-fn="sd_update_row_count">sd_update_row_count</button>
+        </div>
+      </div>
+
+      <div class="flow-note fn1">Kodboken (<code>sd_codebook</code>) och DDI-exporten (<code>sd_export_ddi</code>) skapas direkt i R, utan språkmodell.</div>
+      <div class="flow-note fn2">Streckad: valfri RAG-bakgrund från ditt eget referensmaterial.</div>
+    </div>
+  </div>
+
+  <div class="detail" id="detail" aria-live="polite">
+    <div>
+      <div id="d-tags"></div>
+      <h3 id="d-name"></h3>
+      <p id="d-desc"></p>
+      <p id="d-extra" class="muted"></p>
+    </div>
+    <div>
+      <span class="eyebrow">Exempel</span>
+      <pre id="d-code"></pre>
+    </div>
+  </div>
+</section>
+
+<section id="integritet">
+  <span class="eyebrow">Dataskydd</span>
+  <h2>Vad språkmodellen ser och vad den aldrig ser</h2>
+  <p>Modellen körs på din egen dator via Ollama, så ingenting skickas till en extern tjänst. Dessutom får modellen bara de nyckeltal som R har beräknat. Innehållet i öppna svar hålls alltid utanför prompten.</p>
+  <div class="split">
+    <div class="panel">
+      <h3>Går in i prompten</h3>
+      <ul>
+        <li class="yes">Variabelns namn, etikett och identifierade roll</li>
+        <li class="yes">Frekvenser och värdeetiketter för likert- och kategorivariabler</li>
+        <li class="yes">Medelvärde, standardavvikelse, min och max för kontinuerliga variabler</li>
+        <li class="yes">För öppna svar: medellängd i tecken, antal olika svar och antal saknade</li>
+        <li class="yes">Valfritt: utdrag ur ditt eget referensmaterial (RAG)</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Går aldrig in</h3>
+      <ul>
+        <li class="nope">Enskilda svarsrader</li>
+        <li class="nope">Texten i öppna svar, inte ens som citat</li>
+        <li class="nope">Värden för svarandenas id</li>
+      </ul>
+      <p class="muted" style="font-size:.88rem">Modellens text granskas alltid innan den sparas: funktionerna som skriver filer körs som standard i förhandsgranskningsläge (<code>dry_run = TRUE</code>).</p>
+    </div>
+  </div>
+</section>
+
+<section id="roller">
+  <span class="eyebrow">Variabelroller</span>
+  <h2>Varje variabel får en roll, och rollen avgör vad som beräknas</h2>
+  <p>Nedan paketets exempeldata <code>survey_data</code>: en enkät om arbetsvälbefinnande med 200 svarande och 17 variabler, färgade enligt identifierad roll. Kodboken behandlar likert-frågor med samma namnprefix som en skala. Variabelnamnen är på finska, som i originaldatan.</p>
+  <div class="pipe-scroll">
+    <div style="min-width:560px;display:flex;flex-direction:column;gap:6px">
+      <div class="strip" id="strip"></div>
+      <div class="brackets">
+        <div style="grid-column:7/11">tt · 4 frågor</div>
+        <div style="grid-column:11/14">joh · 3</div>
+        <div style="grid-column:14/17">imu · 3</div>
+      </div>
+    </div>
+  </div>
+  <div class="roles">
+    <div class="role" style="--c:var(--r-id)"><b>id</b><p>Namnet innehåller <code>id</code> eller <code>tunnus</code>, eller alla värden är unika.</p></div>
+    <div class="role" style="--c:var(--r-nominal)"><b>nominal</b><p>Text- eller faktorvariabel med återkommande värden.</p></div>
+    <div class="role" style="--c:var(--r-likert)"><b>likert</b><p>Heltal, 2–11 olika värden, variationsvidd högst 10.</p></div>
+    <div class="role" style="--c:var(--r-cont)"><b>continuous</b><p>Övriga numeriska variabler.</p></div>
+    <div class="role" style="--c:var(--r-text)"><b>text</b><p>Över hälften av värdena unika eller medellängd över 30 tecken.</p></div>
+    <div class="role" style="--c:var(--r-date)"><b>date</b><p>Kolumnen är av datum- eller tidsstämpeltyp.</p></div>
+    <div class="role" style="--c:var(--r-weight)"><b>weight</b><p>Numerisk, med <code>paino</code>, <code>weight</code> eller <code>wt</code> i namnet.</p></div>
+    <div class="role" style="--c:var(--r-unknown)"><b>unknown</b><p>Inget av ovanstående.</p></div>
+  </div>
+  <p class="note">Ordningen spelar roll: kör <code>sd_set_missing()</code> före <code>sd_detect_roles()</code>. Annars sträcker till exempel koden 99 ut variationsvidden för en skala 1–5, och likert-frågan klassas som kontinuerlig.</p>
+</section>
+
+<section id="resultat">
+  <span class="eyebrow">Vad som skapas</span>
+  <h2>Resultat och var de sparas</h2>
+  <p>Varje dataset som dokumenteras får ett eget litet R-paket. SurveyDokum fyller i innehållet, medan paketstrukturen och webbplatsen skapas med de etablerade verktygen usethis och pkgdown.</p>
+  <div class="outs">
+    <div class="out">
+      <span class="tag l">språkmodell</span>
+      <h3>Beskrivning av datan</h3>
+      <span class="file">inst/methodology/kuvaus.txt</span>
+      <p>En läsbar textbeskrivning för metoddokumentationen. Du kan ställa följdfrågor till modellen i samma konversation.</p>
+      <span class="by">sd_document()</span>
+    </div>
+    <div class="out">
+      <span class="tag l">språkmodell</span>
+      <h3>R-hjälpsida</h3>
+      <span class="file">R/survey_data.R → ?survey_data</span>
+      <p>roxygen2-dokumentation där varje variabel beskrivs med typ och saknade värden.</p>
+      <span class="by">sd_generate_roxygen()</span>
+    </div>
+    <div class="out">
+      <span class="tag r">R</span>
+      <h3>HTML-kodbok</h3>
+      <span class="file">inst/codebook/codebook.html</span>
+      <p>Fördelningsdiagram per variabel, skalornas reliabilitet och värdeetiketter, med paketet codebook.</p>
+      <span class="by">sd_codebook()</span>
+    </div>
+    <div class="out">
+      <span class="tag r">R</span>
+      <h3>DDI-kodbok</h3>
+      <span class="file">codebook.xml</span>
+      <p>Maskinläsbar beskrivning enligt DDI Codebook 2.6 för arkivering och metadatakataloger. Endast metadata, inga datavärden.</p>
+      <span class="by">sd_export_ddi()</span>
+    </div>
+    <div class="out ext">
+      <span class="tag w">usethis</span>
+      <h3>Datapaket</h3>
+      <span class="file">data/survey_data.rda</span>
+      <p>Den städade datan sparas i paketet och laddas med ett enda <code>library()</code>-anrop.</p>
+      <span class="by">usethis::use_data()</span>
+    </div>
+    <div class="out ext">
+      <span class="tag w">pkgdown</span>
+      <h3>Dokumentationswebbplats</h3>
+      <span class="file">docs/</span>
+      <p>En statisk webbplats som samlar hjälpsidor och guider. Publiceras på GitHub Pages eller kopieras till en nätverksenhet.</p>
+      <span class="by">pkgdown::build_site()</span>
+    </div>
+  </div>
+</section>
+
+<section id="uppdatering">
+  <span class="eyebrow">Underhåll</span>
+  <h2>När datan ändras</h2>
+  <p>Hela dokumentationen behöver inte skrivas om, vilket skulle kasta bort text du redan granskat. Kontrollera först snabbt vad som har ändrats och uppdatera sedan bara det.</p>
+  <div class="decide">
+    <div class="panel">
+      <span class="q">Nya variabler?</span>
+      <p class="muted" style="font-size:.9rem">Till exempel en summapoäng som <code>tt_mean</code> eller frågor från en ny våg.</p>
+      <div class="steps">
+        <div><code>sd_check_documentation_current()</code> listar odokumenterade variabler. Ingen språkmodell.</div>
+        <div class="l"><code>sd_update_roxygen()</code> ber om beskrivningar endast för de nya variablerna. Befintliga beskrivningar, titeln och <code>@details</code> förblir orörda.</div>
+        <div>Antalet variabler på <code>@format</code>-raden uppdateras, och den gamla filen sparas som <code>.bak</code>-säkerhetskopia.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <span class="q">Fler svarande?</span>
+      <p class="muted" style="font-size:.9rem">Samma frågor, en ny enkätomgång.</p>
+      <div class="steps">
+        <div><code>sd_check_row_count()</code> jämför det dokumenterade radantalet med datan. Ingen språkmodell.</div>
+        <div><code>sd_update_row_count()</code> rättar talet på <code>@format</code>-raden. Radantalet har ett enda rätt värde, så ingen modell behövs.</div>
+        <div>Om ändringen är stor, kör <code>sd_document()</code> på nytt, eftersom beskrivningen bygger på hela datamängden.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="snabbstart">
+  <span class="eyebrow">Snabbstart</span>
+  <h2>Hela vägen i en överblick</h2>
+  <p>Du behöver R, paketen usethis, devtools, roxygen2 och pkgdown samt ellmer, haven, readxl och codebook. Stegen med språkmodell kräver dessutom <a href="https://ollama.com/" style="color:var(--accent)">Ollama</a> och en nedladdad modell, till exempel <code>ollama pull gemma3:12b</code>. Utförliga guider finns i paketet på finska, engelska och svenska.</p>
+<pre><span class="c"># 1. Ett nytt paket för datan (öppnas i ett nytt RStudio-fönster)</span>
+usethis::create_package("sökväg/MinEnkät")
+usethis::use_data_raw("aineisto")
+
+<span class="c"># 2. Läs in, städa och identifiera roller</span>
+library(SurveyDokum)
+data &lt;- sd_read("data-raw/min_data.sav")
+data &lt;- sd_set_missing(data, codes = c(-9, -1))
+data &lt;- sd_detect_roles(data)
+sd_summarise(data)                         <span class="c"># kontrollera nyckeltalen</span>
+
+<span class="c"># 3. Spara datan i paketet</span>
+survey_data &lt;- sd_get_data(data)
+usethis::use_data(survey_data, overwrite = TRUE)
+
+<span class="c"># 4. Språkmodellen skriver (granska innan du sparar)</span>
+sd_document(data, language = "sv",
+            save_to = "inst/methodology/beskrivning.txt")
+sd_generate_roxygen(data, "survey_data", language = "sv",
+                    dry_run = FALSE)
+devtools::document()
+
+<span class="c"># 5. Kodböcker och webbplats</span>
+sd_codebook(data)
+sd_export_ddi(data, file = "codebook.xml")
+pkgdown::build_site()</pre>
+</section>
+
+<footer>SurveyDokum · MIT-licens · kärnberoenden är endast stats och tibble; ellmer, ragnar, haven, readxl, codebook och DDIwR är valfria. Baserat på paketets källkod, hjälpsidor och kom-igång-guide i september 2026.</footer>
+</div>
+
+<script>
+const FN = {
+  sd_read:{t:["r"],d:"Läser in en datafil och returnerar ett sd_data-objekt. Formatet avgörs av filändelsen: csv, tsv, xlsx, xls, sav, dta eller rds. Variabel- och värdeetiketter från SPSS- och Stata-filer hämtas automatiskt till metadatan.",x:"Alla andra funktioner tar detta objekt som indata.",c:'data <- sd_read("data-raw/enkat.sav")\nprint(data)'},
+  sd_get_data:{t:["r"],d:"Returnerar datan i ett sd_data-objekt som en vanlig tibble, till exempel för att spara den i ett paket.",x:"Motsvarigheter: sd_get_meta() returnerar metadatan och is_sd_data() kontrollerar objekttypen.",c:'survey_data <- sd_get_data(data)\nusethis::use_data(survey_data, overwrite = TRUE)'},
+  sd_get_meta:{t:["r"],d:"Returnerar metadatan: roller, variabeletiketter, värdeetiketter, koder för saknade värden och paradata (insamlingssätt, fältperiod, svarsfrekvens).",x:"Metadatan följer med datan genom hela flödet.",c:'meta <- sd_get_meta(data)\nmeta$roles\nmeta$missing_codes'},
+  sd_set_missing:{t:["r"],d:"Markerar angivna koder som saknade värden, antingen för alla eller valda variabler. De ursprungliga koderna sparas i metadatan, så att DDI-exporten kan markera dem som saknade kategorier.",x:"Kör detta innan rollerna identifieras.",c:'data <- sd_set_missing(\n  data, codes = c(99, -9),\n  vars = c("tt1", "tt2")\n)'},
+  sd_detect_roles:{t:["r"],d:"Gissar en roll för varje variabel med enkla regler: datatyp, antal och variationsvidd för värdena samt namnmönster. Möjliga roller är id, nominal, likert, continuous, text, date, weight och unknown.",x:"Resultatet är en utgångspunkt, inte en garanti. Till exempel antal barn kan se ut som en likert-fråga.",c:'data <- sd_detect_roles(data)\ndata$meta$roles'},
+  sd_set_role:{t:["r"],d:"Anger en enskild variabels roll för hand när den automatiska gissningen är fel.",x:"",c:'data <- sd_set_role(data, "barn", "continuous")'},
+  sd_summarise:{t:["r"],d:"Beräknar nyckeltal enligt roll för varje variabel: medelvärde, standardavvikelse och variationsvidd för kontinuerliga variabler, frekvenser för likert- och kategorivariabler, och för öppna svar endast medellängd och antal olika svar.",x:"Samma sammanfattning är det som språkmodellen senare får se.",c:'sammanfattning <- sd_summarise(data)\nprint(sammanfattning)'},
+  sd_codebook:{t:["r"],d:"Skapar en HTML-kodbok med paketet codebook: fördelningsdiagram, värdeetiketter och skalornas reliabilitet. Likert-frågor grupperas till skalor efter gemensamt namnprefix (tt1, tt2, tt3 → tt).",x:"Du kan ange egen gruppering med argumentet groups. Hjälpfunktionen sd_prepare_codebook_data() förbereder datan.",c:'kodbok <- sd_codebook(data)\nkodbok$file\n#> "inst/codebook/codebook.html"'},
+  sd_export_ddi:{t:["r"],d:"Skriver metadatan till en XML-fil enligt standarden DDI Codebook 2.6 med paketet DDIwR. Filen innehåller variabler, rollbaserade format, värdeetiketter och koder markerade som saknade.",x:"Endast metadata, inga datavärden. Lämpar sig för arkivering och metadatakataloger.",c:'sd_export_ddi(\n  data, file = "codebook.xml",\n  title = "Enkät om arbetsvälbefinnande 2024"\n)'},
+  sd_check_ollama:{t:["l"],d:"Kontrollerar snabbt att Ollama körs och att vald modell är nedladdad, innan en långsam generering startar.",x:"Standardmodellen är gemma3:12b på localhost:11434.",c:'sd_check_ollama(model = "gemma3:12b")'},
+  sd_document:{t:["l"],d:"Skriver en läsbar beskrivning av datan. Funktionen beräknar nyckeltalen, bygger prompten (sd_build_prompt) och skickar den till den lokala modellen. Språket väljs med argumentet language: fi, en eller sv.",x:"Returnerar även ett chattobjekt som du kan ställa följdfrågor till i samma kontext. Med en lokal modell kan svaret ta flera minuter.",c:'dok <- sd_document(data, language = "sv")\nprint(dok)\ndok$chat$chat("Vilken dimension fick\n  högst medelvärden?")'},
+  sd_generate_roxygen:{t:["l","w"],d:"Skriver roxygen2-dokumentation för dataobjektet, som blir R-hjälpsidan ?survey_data där varje variabel beskrivs. Strukturen (variabellista, typer, saknade) kommer från R, och modellen skriver beskrivningarna.",x:"Som standard endast förhandsgranskning (dry_run = TRUE). Inget skrivs till disk förrän du har godkänt resultatet.",c:'res <- sd_generate_roxygen(data, "survey_data")\nprint(res)\nsd_generate_roxygen(data, "survey_data",\n                    dry_run = FALSE)'},
+  sd_retrieve_context:{t:["l"],d:"Valfritt RAG-lager. Hämtar för varje variabel bakgrundstext ur ditt eget referensmaterial (t.ex. en metodordlista, tidigare kodböcker, en intern stilguide) och lägger till den i prompten med källhänvisningar.",x:"SurveyDokum bygger inte själva sökdatabasen, den skapas med paketet ragnar och skickas in som argumentet store.",c:'store <- ragnar::ragnar_store_connect(\n  "min_rag_store.ragnar.duckdb")\nsd_document(data, store = store)'},
+  sd_update_roxygen:{t:["l","w"],d:"Lägger till beskrivningar endast för variabler som ännu inte är dokumenterade. Tidigare granskade beskrivningar, titeln och @details bevaras, och antalet variabler på @format-raden uppdateras.",x:"Kontrollera först med sd_check_documentation_current(). Vid skrivning sparas den gamla filen som .bak-säkerhetskopia.",c:'sd_check_documentation_current(data, "survey_data")\nsd_update_roxygen(data, "survey_data",\n                  dry_run = FALSE)'},
+  sd_update_row_count:{t:["r","w"],d:"Rättar radantalet på roxygen-filens @format-rad när nya svarande har lagts till. Använder ingen språkmodell, eftersom rätt tal kommer direkt från datan.",x:"Kontrollera först med sd_check_row_count(). Vid skrivning skapas en .bak-säkerhetskopia.",c:'sd_check_row_count(data, "survey_data")\nsd_update_row_count(data, "survey_data",\n                    dry_run = FALSE)'}
+};
+const TAG={r:'<span class="tag r">R</span>',l:'<span class="tag l">språkmodell</span>',w:'<span class="tag w">förhandsgranska först</span>'};
+const chips=[...document.querySelectorAll('.chip')];
+function show(name){
+  const f=FN[name]; if(!f) return;
+  chips.forEach(c=>c.setAttribute('aria-pressed',c.dataset.fn===name?'true':'false'));
+  document.getElementById('d-tags').innerHTML=f.t.map(k=>TAG[k]).join('');
+  document.getElementById('d-name').textContent=name+'()';
+  document.getElementById('d-desc').textContent=f.d;
+  const ex=document.getElementById('d-extra'); ex.textContent=f.x; ex.hidden=!f.x;
+  document.getElementById('d-code').textContent=f.c;
+}
+chips.forEach(c=>c.addEventListener('click',()=>show(c.dataset.fn)));
+show('sd_document');
+
+const VARS=[["vastaaja_id","id"],["ika_luokka","nominal"],["sukupuoli","nominal"],["koulutus","nominal"],["tyosuhde","nominal"],["tyovuodet","cont"],["tt1","likert"],["tt2","likert"],["tt3","likert"],["tt4","likert"],["joh1","likert"],["joh2","likert"],["joh3","likert"],["imu1","likert"],["imu2","likert"],["imu3","likert"],["avoin_palaute","text"]];
+document.getElementById('strip').innerHTML=VARS.map(([n,r])=>`<div class="var" style="background:var(--r-${r})" title="${n}: ${r==='cont'?'continuous':r}"><span>${n}</span></div>`).join('');
+</script>
+</body>
+</html>

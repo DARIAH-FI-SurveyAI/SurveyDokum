@@ -1,0 +1,348 @@
+---
+title: "Komma igång: skapa ett nytt enkätpaket med SurveyDokum"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Komma igång: skapa ett nytt enkätpaket med SurveyDokum}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Vad denna guide täcker
+
+SurveyDokums arbetsflöde är uppdelat i två delar:
+
+1. **Engångssteg för paketstrukturen** — att skapa ett nytt R-paket för din datamängd,
+   mappstruktur och att bygga en dokumentationswebbplats. För dessa används
+   allmänna verktyg direkt, paketen **usethis** och **pkgdown** -- SurveyDokum
+   omsluter inte dessa i egna funktioner, eftersom de inte är steg specifika för
+   enkätdata (se "Varför dessa steg inte är egna funktioner" i slutet).
+2. **Själva hanteringen och dokumentationen av enkätdatan** — för detta erbjuder
+   SurveyDokum funktioner med `sd_`-prefix: inläsning av data, identifiering av
+   variabelroller, statistik, LLM-baserad beskrivande dokumentation,
+   roxygen2-dokumentation och kodbok.
+
+Denna guide går igenom båda delarna som en sammanhängande väg från början till slut.
+Mer detaljerad användning och parametrar för enskilda `sd_`-funktioner finns på deras
+egna hjälpsidor (t.ex. `?sd_read`, `?sd_summarise`, `?sd_document`).
+
+Denna vinjett är en parallell svensk översättning av paketets finska vinjett
+("Uuden surveypaketin perustaminen SurveyDokumin avulla") -- det finns även en
+engelsk version ("Getting started with SurveyDokum"). Alla tre täcker samma
+arbetsflöde.
+
+## Förutsättningar
+
+Installera de nödvändiga paketen i förväg:
+
+```r
+install.packages(c("usethis", "devtools", "roxygen2", "pkgdown"))
+install.packages(c("ellmer", "haven", "readxl", "codebook", "rmarkdown"))
+```
+
+De LLM-baserade stegen (`sd_document()`, `sd_generate_roxygen()`) kräver dessutom en
+lokalt installerad och körande [Ollama](https://ollama.com/) samt en nedladdad
+modell, t.ex.:
+
+```sh
+ollama pull gemma3:12b
+```
+
+Du kan kontrollera Ollama-anslutningen i förväg med funktionen `sd_check_ollama()`.
+
+## Steg 1: Skapa en paketmall för den nya datamängden
+
+Varje enkätdataset som ska dokumenteras får sitt eget lilla R-paket — på samma sätt
+som SurveyDokum självt är byggt. `usethis::create_package()` öppnar ett nytt
+RStudio-fönster; fortsätt de återstående stegen i det fönstret.
+
+```r
+usethis::create_package("sökväg/MinEnkat")
+```
+
+## Steg 2: Skapa mappstrukturen
+
+```r
+usethis::use_data_raw("data")   # skapar data-raw/data.R
+
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+```
+
+Kom ihåg att lägga till `SurveyDokum` i det nya paketets `DESCRIPTION`-fil, under
+`Imports` eller `Suggests` (t.ex. `usethis::use_dev_package("SurveyDokum")` om
+SurveyDokum inte är publicerat på CRAN).
+
+## Steg 3: Läs in och förbered datan
+
+```r
+library(SurveyDokum)
+
+data <- sd_read("data-raw/minenkat.sav")   # csv/tsv/xlsx/xls/sav/dta/rds
+
+# Koder för saknade värden städas upp innan rolldetektering:
+data <- sd_set_missing(data, codes = c(-9, -1))
+
+# Automatisk identifiering av variabelroller (id/nominal/likert/continuous/date/text):
+data <- sd_detect_roles(data)
+
+# Kontrollera resultatet och korrigera vid behov för hand:
+data$meta$roles
+data <- sd_set_role(data, "nagon_variabel", "nominal")
+
+# Statistisk sammanfattning -- för öppna textsvar visas endast aggregat,
+# aldrig enskilda svar:
+sammanfattning <- sd_summarise(data)
+print(sammanfattning)
+```
+
+## Steg 4: Spara datan i paketet
+
+```r
+survey_data <- sd_get_data(data)
+usethis::use_data(survey_data, overwrite = TRUE)
+```
+
+## Steg 5: Dokumentation -- en läsbar beskrivning och roxygen2
+
+Läsbar, LLM-skriven beskrivning (t.ex. för metoddokumentation):
+
+```r
+dokumentation <- sd_document(data, model = "gemma3:12b", language = "sv")
+print(dokumentation)   # läs resultatet noggrant innan du sparar
+
+# När texten ser bra ut:
+sd_document(data, model = "gemma3:12b", language = "sv", save_to = "inst/methodology/beskrivning.txt")
+```
+
+`roxygen2`-datadokumentation för hjälpsidan `?survey_data`:
+
+```r
+roxygen_resultat <- sd_generate_roxygen(data, "survey_data", language = "sv")   # dry_run = TRUE som standard
+print(roxygen_resultat)   # kontrollera texten innan du skriver den till disk
+
+# När texten ser bra ut, skriv den till R/survey_data.R:
+sd_generate_roxygen(data, "survey_data", language = "sv", dry_run = FALSE)
+
+devtools::document()
+?survey_data   # kontrollera slutresultatet
+```
+
+Både `sd_document()` och `sd_generate_roxygen()` accepterar en `language`-parameter
+(standard `"fi"`; stöder också `"en"` och `"sv"`) som styr på vilket språk LLM:en
+skriver den genererade beskrivande texten -- oberoende av vilket språk datasetets
+egna variabeletiketter råkar vara på. Så kan samma dataset dokumenteras på finska,
+engelska eller svenska beroende på din målgrupp, som visas ovan med
+`language = "sv"`.
+
+Obs: detta påverkar inte hur själva statistiken (`sd_summarise()`/`format()`)
+presenteras, vilket för närvarande alltid sker på finska -- endast instruktionerna
+som ges till LLM:en och texten den skriver ändras.
+
+## Steg 5b: Uppdatera dokumentationen när nya variabler tillkommer i datasetet
+
+Under ett forskningsprojekts gång uppstår ofta nya variabler i datasetet -- t.ex.
+summapoäng beräknade utifrån tidigare frågor, eller en ny våg av frågor läggs till.
+Att köra `sd_generate_roxygen()` på nytt skulle skriva om hela `\describe{}`-blocket
+från början, vilket skulle förkasta alla beskrivningstexter du redan granskat och
+godkänt. Använd istället:
+
+```r
+# Kontrollera snabbt (utan LLM-anrop) om dokumentationen är aktuell:
+sd_check_documentation_current(data, "survey_data")
+```
+
+Om nya, odokumenterade variabler hittas, ber `sd_update_roxygen()` LLM:en om
+beskrivningar ENDAST för dem -- titeln, `@details`, `@source` och tidigare
+dokumenterade variabler lämnas orörda, och `@format`-radens variabelantal
+uppdateras automatiskt:
+
+```r
+# datasetet innehåller nu t.ex. en ny summavariabel "tt_mean":
+uppdatering <- sd_update_roxygen(data, "survey_data", language = "sv")   # dry_run = TRUE som standard
+print(uppdatering)   # kontrollera de tillagda beskrivningarna innan du sparar
+
+# När texten ser bra ut:
+sd_update_roxygen(data, "survey_data", language = "sv", dry_run = FALSE)
+devtools::document()
+```
+
+`dry_run = FALSE` tar alltid en säkerhetskopia av den tidigare filen
+(`R/survey_data.R.bak`) innan den skriver, så en oönskad uppdatering kan ångras genom
+att återställa säkerhetskopian. Nya variabler identifieras automatiskt genom att
+jämföra datasetets variabler med de som redan är dokumenterade -- om du vill
+beskriva variablerna i en ordning du själv väljer, eller om den automatiska
+identifieringen inte fungerar (t.ex. en kraftigt handredigerad fil), ange dem
+istället med parametern `new_vars`:
+
+```r
+sd_update_roxygen(data, "survey_data", new_vars = c("tt_mean", "tt_kategori"), language = "sv")
+```
+
+`sd_update_roxygen()` accepterar också parametern `language`, på samma sätt som
+`sd_generate_roxygen()` (se ovan) -- den bör normalt matcha det språk som filens
+befintliga text redan är skriven på.
+
+Detta funktionspar (`sd_check_documentation_current()`/`sd_update_roxygen()`)
+täcker endast NYA VARIABLER. För situationen där variablerna förblir desamma
+men datasetet får fler rader (svarande), se nästa avsnitt, Steg 5c.
+
+## Steg 5c: När datasetet får nya rader (svarande)
+
+Den motsatta situationen kan också uppstå: variablerna förblir desamma, men
+nya rader läggs till i datasetet (t.ex. en ny våg av samma enkät). Då behöver
+`\describe{}`-blocket ingen ändring alls -- endast radantalet som anges i
+roxygen2-filens `@format`-rad (t.ex. "... med 200 rader och 17 variabler:")
+är nu inaktuellt. `sd_check_row_count()` och `sd_update_row_count()` sköter
+detta helt utan något LLM-anrop -- till skillnad från en variabels
+beskrivning har ett radantal alltid exakt ett korrekt värde, så det finns
+inget att fråga en modell om:
+
+```r
+# Kontrollera snabbt (utan LLM-anrop) om det dokumenterade radantalet matchar datan:
+sd_check_row_count(data, "survey_data")
+
+# Om det inte matchar, korrigera @format-raden:
+uppdatering <- sd_update_row_count(data, "survey_data")   # dry_run = TRUE som standard
+print(uppdatering)   # kontrollera ändringen innan du sparar
+
+# När det ser bra ut:
+sd_update_row_count(data, "survey_data", dry_run = FALSE)
+devtools::document()
+```
+
+Liksom `sd_update_roxygen()` tar även `sd_update_row_count()` alltid en
+säkerhetskopia (`.bak`) innan den skriver när `dry_run = FALSE`.
+
+Observera att `sd_update_row_count()` uppdaterar ENDAST roxygen2-filens
+`@format`-rad -- den rör inte `sd_document()`:s beskrivande text. Eftersom
+den texten (t.ex. antalet svarande, fördelningar) skrivs av LLM:en utifrån
+hela datasetet och inte kan uppdateras stegvis på samma sätt som nya
+variabelbeskrivningar kan, lämnas dess uppdatering avsiktligt som ett
+manuellt steg -- kör `sd_document()` på nytt om förändringen i radantal är
+tillräckligt betydande för att motivera det.
+
+## Steg 6: Kodbok
+
+```r
+kodbok <- sd_codebook(data)
+kodbok$file   # sökväg till den färdiga HTML-kodboken (inst/codebook/codebook.html)
+```
+
+`sd_codebook()` identifierar automatiskt summapoängsgrupper byggda av
+Likert-skaleitem baserat på ett gemensamt namnprefix (t.ex. `tt1`, `tt2`, `tt3` →
+grupp `"tt"`). Du kan åsidosätta den automatiska identifieringen med parametern
+`groups` om din egen namngivningskonvention är annorlunda.
+
+## Steg 7: pkgdown-dokumentationswebbplats (valfritt men rekommenderat)
+
+```r
+usethis::use_pkgdown()
+usethis::use_readme_rmd()      # redigera README.Rmd som du vill
+devtools::build_readme()
+```
+
+Redigera vid behov filen `_pkgdown.yml` som skapades i paketets rot, t.ex.:
+
+```yaml
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  title: "Min Enkät"
+
+home:
+  title: "MinEnkat"
+  description: "Dokumentation och beskrivning av enkätdataset"
+```
+
+Bygg och förhandsgranska webbplatsen:
+
+```r
+pkgdown::build_site()
+pkgdown::preview_site()
+
+# Du kan också bygga endast delar av den:
+pkgdown::build_reference()   # endast ?-hjälpsidorna
+pkgdown::build_home()        # endast startsidan (README)
+```
+
+## Steg 8: Publicering (valfritt)
+
+**GitHub Pages:**
+
+```r
+usethis::use_git()
+usethis::use_github()
+usethis::use_pkgdown_github_pages()
+```
+
+Därefter uppdateras webbplatsen med `pkgdown::build_site()`, `git add docs/`,
+`git commit`, `git push`.
+
+**Utan GitHub (nätverksenhet / SharePoint):** mappen `docs/` är en vanlig statisk
+HTML-webbplats — kopiera den som den är till önskad plats, eller zippa den för
+distribution med `zip("dokumentation.zip", "docs")`.
+
+## Varför dessa steg inte är SurveyDokums egna funktioner
+
+Att skapa paketet (`usethis::create_package()`) och bygga dokumentationswebbplatsen
+(`pkgdown::build_site()`) är inte steg specifika för enkätdata — de är allmänna
+uppgifter inom R-paketutveckling som usethis och pkgdown redan hanterar väl.
+SurveyDokums eget mervärde ligger specifikt i de enkätspecifika stegen:
+identifiering av variabelroller, beräkning av statistik, LLM-baserad dokumentation
+och generering av kodbok — för dessa finns `sd_`-funktionerna. Detta håller
+SurveyDokums kärna liten och fokuserad, istället för att upprepa befintliga,
+väl fungerande verktyg.
+
+## Sammanfattning — alla kommandon i följd
+
+```r
+library(usethis)
+library(devtools)
+library(SurveyDokum)
+
+# 1. Paketmall
+usethis::create_package("sökväg/MinEnkat")
+
+# --- fortsätt i det nya fönstret ---
+
+# 2. Mappstruktur
+usethis::use_data_raw("data")
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+
+# 3. Inläsning och förberedelse av data
+data <- sd_read("data-raw/minenkat.sav")
+data <- sd_set_missing(data, codes = c(-9, -1))
+data <- sd_detect_roles(data)
+sammanfattning <- sd_summarise(data)
+
+# 4. Spara i paketet
+survey_data <- sd_get_data(data)
+usethis::use_data(survey_data, overwrite = TRUE)
+
+# 5. Dokumentation
+sd_document(data, language = "sv", save_to = "inst/methodology/beskrivning.txt")
+sd_generate_roxygen(data, "survey_data", language = "sv", dry_run = FALSE)
+devtools::document()
+
+# 6. Kodbok
+sd_codebook(data)
+
+# 7. pkgdown-webbplats
+usethis::use_pkgdown()
+usethis::use_readme_rmd()
+devtools::build_readme()
+pkgdown::build_site()
+```

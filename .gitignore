@@ -1,0 +1,19 @@
+.Rproj.user
+docs
+inst/doc
+vignettes/*.html
+vignettes/*.R
+/doc/
+/Meta/
+
+# Kehitysmuistiinpanot, kokeiluaineistot ja API-avaimet: ei GitHubiin
+dev/
+.Renviron
+*Renviron*.txt
+testi_codebook*.xml
+figure/
+.Rhistory
+.RData
+.httr-oauth
+.DS_Store
+.quarto
