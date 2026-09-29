@@ -1,0 +1,330 @@
+# Använda RAG med SurveyDokum
+
+## Vad denna guide täcker
+
+SurveyDokums LLM-baserade dokumentation
+([`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md),
+[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md))
+skriver som standard enbart utifrån den statistik som
+[`sd_summarise()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_summarise.md)
+beräknar. RAG (*Retrieval-Augmented Generation*) gör det möjligt att
+dessutom mata modellen med bakgrundsmaterial du själv väljer – en
+ordlista för enkätmetodik, ett kontrollerat vokabulär, tidigare
+kodböcker som stilexempel, en tvåspråkig terminologilista – så att
+texten bygger på mer än bara siffrorna och modellens egen allmänna
+kunskap.
+
+RAG-stödet i SurveyDokum är medvetet ett tunt, **valfritt** lager:
+SurveyDokum bygger, levererar eller underhåller inget kunskapslager åt
+dig. Det *använder* endast ett som du själv bygger med paketet
+[ragnar](https://ragnar.tidyverse.org/), utifrån vilket referensmaterial
+du väljer – din egen dokumentation om enkätmetodik, kontrollerade
+vokabulär, tidigare kodböcker, stilguider, ordlistor, eller vad som
+helst annat som ragnar kan omvandla till text. Denna guide går igenom
+att bygga ett sådant lager med ragnar från grunden, och att sedan koppla
+det till SurveyDokums egna funktioner, på en allmän nivå som gäller
+oavsett vilket material du själv tar med.
+
+Som ett konkret exempel utvecklades denna guide mot ett litet
+prototyplager byggt av en handfull European Social Survey
+(ESS)-dokumentations-PDF:er och ett par referenswebbsidor – fallgroparna
+som nämns längs vägen är sådana man faktiskt stötte på när prototypen
+byggdes, inte hypotetiska, och de gäller på samma sätt oavsett vilket
+källmaterial du själv har.
+
+Denna vinjett är en parallell svensk översättning av paketets engelska
+vinjett (“Using RAG with SurveyDokum”) – det finns även en finsk version
+(“RAGin käyttö SurveyDokumin kanssa”). Alla tre täcker samma
+arbetsflöde.
+
+## Förutsättningar
+
+``` r
+
+install.packages("ragnar")     # CRAN; för med sig duckdb-beroendet
+install.packages("pdftools")   # reservlösning för att läsa PDF:er, se Steg 1
+install.packages("rvest")      # reservlösning för att läsa webbsidor, se Steg 1
+```
+
+ragnar behöver en embedding-modell som omvandlar textbitar till
+vektorer. Eftersom SurveyDokum redan förlitar sig på en lokal
+[Ollama](https://ollama.com/)-installation för
+[`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md)/[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md),
+används i denna guide också en Ollama-embedding-modell, vilket håller
+hela kedjan offline-kompatibel – relevant när ditt referensmaterial är
+känsligt (t.ex. dokumentation av mikrodata med begränsad åtkomst):
+
+``` sh
+ollama pull embeddinggemma:300m
+```
+
+Vilken annan Ollama-embedding-modell som helst fungerar också – använd
+bara dess namn i
+[`embed_ollama()`](https://ragnar.tidyverse.org/reference/embed_ollama.html)
+i Steg 3 nedan. Kontrollera att Ollama-servern körs (standardadress
+`http://localhost:11434`).
+
+## Steg 1: Läs in dina källdokument som Markdown
+
+ragnars egen
+[`read_as_markdown()`](https://ragnar.tidyverse.org/reference/read_as_markdown.html)
+använder MarkItDown, som laddar ner sin egen Python-miljö (via `uv`) vid
+första användningen, och bevarar rubrikstrukturen bäst av alternativen
+här. I praktiken kan den krascha på Windows med ett fel som
+`"Error loading Python module _ragnartools.markitdown"` – troligen
+blockerar Windows eller ett antivirusprogram ett nedladdat nativt
+bibliotek (t.ex. `onnxruntime`). Om du stöter på detta finns två
+reservlösningar som helt kringgår Python-miljön, till priset av rå text
+utan rubrikstruktur:
+
+``` r
+
+library(ragnar)
+
+# PDF:er, via pdftools:
+read_pdf_fallback <- function(path) {
+  pages <- pdftools::pdf_text(path)
+  txt <- paste(pages, collapse = "\n\n---\n\n")
+  MarkdownDocument(txt, origin = path)
+}
+
+# Webbsidor, via rvest:
+read_html_fallback <- function(url) {
+  page <- rvest::read_html(url)
+  main_node <- rvest::html_element(page, "main")
+  if (length(main_node) == 0 || is.na(main_node)) main_node <- page
+  txt <- rvest::html_text2(main_node)
+  MarkdownDocument(txt, origin = url)
+}
+```
+
+Använd vilken väg som helst som fungerar på din dator:
+
+``` r
+
+pdf_filer <- list.files("sökväg/referens_pdf", pattern = "\\.pdf$", full.names = TRUE)
+markdown_docs <- lapply(pdf_filer, read_pdf_fallback)   # eller read_as_markdown()
+names(markdown_docs) <- basename(pdf_filer)
+```
+
+## Steg 2: Städa bort upprepade sidhuvuden, sidfötter och sidnummer (endast PDF:er)
+
+`pdftools::pdf_text()` returnerar rå sidtext, inklusive upprepade
+sidhuvuden/sidfötter (t.ex. ett dokumentnamn som upprepas på varje sida)
+och sidnummerrader – dessa blir brus i dina textbitar om de lämnas kvar.
+En hjälpfunktion som tar bort rader som *upprepas* på de flesta sidor
+(istället för att söka efter en specifik text, så den fungerar för
+vilken PDF som helst) är värd att skriva en gång och återanvända:
+
+``` r
+
+strip_repeated_headers_footers <- function(pages, n_lines = 2, threshold = 0.5, prefix_len = 30) {
+  split_pages <- strsplit(pages, "\n")
+  n <- length(split_pages)
+
+  get_candidates <- function(lines) {
+    lines <- trimws(lines)
+    lines <- lines[lines != ""]
+    if (length(lines) == 0) return(character())
+    unique(c(utils::head(lines, n_lines), utils::tail(lines, n_lines)))
+  }
+  candidate_lines <- unlist(lapply(split_pages, get_candidates))
+
+  # Fall A: hela raden upprepas identiskt (korta ID:n, sidnummer)
+  line_counts <- table(candidate_lines)
+  repeated_lines <- names(line_counts[line_counts >= threshold * n])
+
+  # Fall B: bara radens BÖRJAN upprepas, medan resten varierar per avsnitt
+  # (t.ex. "Årsrapport 2024 -- Metod  Kapitel 3")
+  prefixes <- substr(candidate_lines, 1, prefix_len)
+  prefixes <- prefixes[nchar(trimws(prefixes)) >= 10]
+  prefix_counts <- table(prefixes)
+  repeated_prefixes <- names(prefix_counts[prefix_counts >= threshold * n])
+
+  vapply(split_pages, function(lines) {
+    trimmed <- trimws(lines)
+    keep <- !trimmed %in% repeated_lines
+    if (length(repeated_prefixes) > 0) {
+      keep <- keep & !(substr(trimmed, 1, prefix_len) %in% repeated_prefixes)
+    }
+    keep <- keep & !grepl("^(page\\s*)?[0-9]{1,4}(\\s*(/|of)\\s*[0-9]{1,4})?$", trimmed, ignore.case = TRUE)
+    paste(lines[keep], collapse = "\n")
+  }, character(1))
+}
+```
+
+Använd den innan texten paketeras i
+[`MarkdownDocument()`](https://ragnar.tidyverse.org/reference/MarkdownDocument.html),
+dvs. inuti `read_pdf_fallback()` ovan:
+`pages <- strip_repeated_headers_footers(pages)`.
+
+## Steg 3: Dela upp och bygg lagret
+
+``` r
+
+store_path <- file.path("sökväg/mapp", "mitt_referensmaterial.ragnar.duckdb")
+
+store <- ragnar_store_create(
+  location = store_path,
+  embed = embed_ollama(model = "embeddinggemma:300m"),
+  overwrite = TRUE,
+  title = "Mitt referensmaterial"
+)
+
+for (doc_name in names(markdown_docs)) {
+  chunks <- markdown_chunk(markdown_docs[[doc_name]])
+  ragnar_store_insert(store, chunks)
+}
+
+ragnar_store_build_index(store)
+```
+
+Två fallgropar värda att känna till i förväg:
+
+- **Lägg till varje dokuments textbitar separat, som ett färskt
+  [`markdown_chunk()`](https://ragnar.tidyverse.org/reference/markdown_chunk.html)-resultat.**
+  Ett lager av version 2 (nuvarande standard) lägger automatiskt till
+  rubrikkontext i varje textbits innehåll under infogningen. Om du
+  kombinerar textbitar från flera dokument till en `data.frame` (t.ex.
+  med `do.call(rbind, ...)`) innan du anropar
+  [`ragnar_store_insert()`](https://ragnar.tidyverse.org/reference/ragnar_store_insert.html),
+  går denna automatik sönder med felet
+  `"modifying chunks$text is not supported with store@version == 2"`. Gå
+  igenom dokumenten i en loop och lägg till dem allt eftersom, som ovan.
+- **[`ragnar_store_build_index()`](https://ragnar.tidyverse.org/reference/ragnar_store_build_index.html)
+  måste köras innan
+  [`ragnar_retrieve()`](https://ragnar.tidyverse.org/reference/ragnar_retrieve.html)
+  fungerar alls.** Utan den kraschar sökningen med ett fel som namnger
+  DuckDB:s BM25-funktion (`match_bm25 does not exist`) – indexet är det
+  som gör fritextsökningen möjlig, så det är inte valfritt, och det
+  måste köras igen efter varje ny omgång infogningar.
+
+Ange `store_path` som en absolut sökväg, inte ett relativt filnamn – om
+din arbetskatalog råkar vara ett annat projekt när du bygger lagret
+första gången, är det dit `.duckdb`-filen hamnar.
+
+När lagret väl är byggt bör man vid senare körningar *ansluta till* det,
+inte bygga om det:
+
+``` r
+
+if (file.exists(store_path)) {
+  store <- ragnar_store_connect(store_path)
+} else {
+  # ... bygg som ovan ...
+}
+```
+
+Bygg om (`overwrite = TRUE`) endast när du byter embedding-modell eller
+lägger till dokument du vill indexera från grunden.
+
+## Steg 4: Prova sökning direkt
+
+``` r
+
+resultat <- ragnar_retrieve(store, "din fråga här", top_k = 5)
+
+# ragnar_retrieve() returnerar en tibble där text-kolumnen trunkeras vid utskrift --
+# använd en liten hjälpfunktion för att se hela texten för varje träff:
+print_ragnar_hits <- function(hits) {
+  for (i in seq_len(nrow(hits))) {
+    row <- hits[i, ]
+    cat(sprintf("--- träff %d/%d: %s (tecken %s-%s) ---\n",
+                i, nrow(hits), basename(row$origin), row$start, row$end))
+    cat(row$text, "\n\n")
+  }
+}
+print_ragnar_hits(resultat)
+```
+
+(I det ESS-baserade prototyplagret gav en fråga som *“Hur mäts politiskt
+förtroende?”* pålitligt rätt kodboks- och enkättextbitar – vad som
+fungerar bra för dig beror helt på vad du har indexerat.)
+
+[`ragnar_retrieve()`](https://ragnar.tidyverse.org/reference/ragnar_retrieve.html)
+kombinerar vektorsökning med DuckDB:s BM25-fritextsökning. Bra att veta
+om du blandar begreppsmässigt olika typer av material i samma lager
+(t.ex. dokumentation om enkätmikrodata tillsammans med en abstrakt
+metadatastandard): BM25 hittar träffar på delat vokabulär (t.ex.
+“codebook”, “variable”, “documentation”) även mellan dokument som
+egentligen inte handlar om samma sak. Detta är en egenskap hos
+hybridsökning, inte en bugg att städa bort – det var precis vad som
+hände när ESS-enkätdokumentation blandades med DDI
+Alliance-standardsidor i prototypen. Om det blir ett problem är
+alternativen att hålla “innehåll” och “referensstandard” i separata
+lager, eller att filtrera träffar utifrån `origin`-fältet; SurveyDokum
+gör inget av detta åt dig.
+
+## Steg 5: Koppla lagret till SurveyDokum
+
+När lagret fungerar tar SurveyDokums egna funktioner hand om det via
+parametern `store` – allt härifrån är bara ett tunt söksteg framför den
+prompt som SurveyDokum redan byggde:
+
+``` r
+
+library(SurveyDokum)
+
+store <- ragnar_store_connect(store_path)
+data <- sd_read("min_enkatdata.csv")
+
+# Enbart sökning, för granskning -- en fråga per variabel, med dess namn och etikett:
+bakgrund <- sd_retrieve_context(data, store, top_k = 2)
+cat(bakgrund)
+
+# Används automatiskt av dokumentationsfunktionerna:
+sd_document(data, model = "gemma3:12b", language = "sv", store = store)
+sd_generate_roxygen(data, "survey_data", language = "sv", store = store)
+```
+
+`store` är som standard `NULL` överallt i SurveyDokum, vilket helt
+hoppar över sökningen – varje exempel i vinjetten “Komma igång” som inte
+nämner `store` fungerar exakt som innan denna funktion fanns. `top_k`
+(standard `2`) styr hur många textbitar som hämtas per variabel;
+[`sd_retrieve_context()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_retrieve_context.md):s
+`max_chars` (standard `600`) trunkerar varje hämtad textbit innan den
+läggs in i prompten, så att ett fåtal långa referensposter inte kan
+dominera den.
+
+Om en fråga misslyckas mot lagret (t.ex. det är oåtkomligt, eller
+embedding-modellen inte körs) omvandlar
+[`sd_retrieve_context()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_retrieve_context.md)
+detta till en varning istället för ett fel, och utelämnar helt enkelt
+den variabelns bakgrundsmaterial – ett otillgängligt referenslager
+blockerar aldrig att dokumentation genereras.
+
+## Sammanfattning – alla kommandon i följd
+
+``` r
+
+library(ragnar)
+library(SurveyDokum)
+
+# 1.-2. Läs in dokument och städa PDF-brus
+pdf_filer <- list.files("sökväg/referens_pdf", pattern = "\\.pdf$", full.names = TRUE)
+markdown_docs <- lapply(pdf_filer, read_pdf_fallback)
+names(markdown_docs) <- basename(pdf_filer)
+
+# 3. Dela upp och bygg lagret (en gång)
+store_path <- file.path("sökväg/mapp", "mitt_referensmaterial.ragnar.duckdb")
+store <- ragnar_store_create(
+  location = store_path,
+  embed = embed_ollama(model = "embeddinggemma:300m"),
+  overwrite = TRUE
+)
+for (doc_name in names(markdown_docs)) {
+  ragnar_store_insert(store, markdown_chunk(markdown_docs[[doc_name]]))
+}
+ragnar_store_build_index(store)
+
+# Vid senare körningar räcker det att ansluta:
+store <- ragnar_store_connect(store_path)
+
+# 4. Prova
+print_ragnar_hits(ragnar_retrieve(store, "din fråga här", top_k = 5))
+
+# 5. Använd med SurveyDokum
+data <- sd_read("min_enkatdata.csv")
+sd_document(data, model = "gemma3:12b", language = "sv", store = store)
+sd_generate_roxygen(data, "survey_data", language = "sv", store = store)
+```

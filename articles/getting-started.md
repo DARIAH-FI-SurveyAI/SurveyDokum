@@ -1,0 +1,386 @@
+# Getting started: setting up a new survey package with SurveyDokum
+
+## What this guide covers
+
+SurveyDokum’s workflow has two parts:
+
+1.  **One-off package-scaffolding steps** — creating a new R package for
+    your dataset, the folder structure, and building a documentation
+    website. These use general-purpose **usethis** and **pkgdown** tools
+    directly – SurveyDokum does not wrap them in its own functions,
+    because they are not steps specific to survey data (see “Why these
+    steps are not their own functions” at the end).
+2.  **Working with and documenting the survey data itself** — this is
+    where SurveyDokum provides its `sd_`-prefixed functions: reading the
+    data, detecting variable roles, statistics, LLM-based descriptive
+    documentation, roxygen2 documentation, and a codebook.
+
+This guide walks through both parts as a single path from start to
+finish. The details and parameters of individual `sd_` functions are in
+their own help pages (e.g.
+[`?sd_read`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_read.md),
+[`?sd_summarise`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_summarise.md),
+[`?sd_document`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md)).
+
+This vignette is a parallel English-language translation of the
+package’s Finnish vignette (“Uuden surveypaketin perustaminen
+SurveyDokumin avulla”) – there is also a Swedish version (“Komma igång
+med SurveyDokum”). All three cover the same workflow.
+
+## Prerequisites
+
+Install the required packages beforehand:
+
+``` r
+
+install.packages(c("usethis", "devtools", "roxygen2", "pkgdown"))
+install.packages(c("ellmer", "haven", "readxl", "codebook", "rmarkdown"))
+```
+
+The LLM-based steps
+([`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md),
+[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md))
+additionally require a locally installed and running copy of
+[Ollama](https://ollama.com/) with a model already pulled, e.g.:
+
+``` sh
+ollama pull gemma3:12b
+```
+
+You can check the Ollama connection beforehand with
+[`sd_check_ollama()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_check_ollama.md).
+
+## Step 1: Create a package skeleton for the new dataset
+
+Each documented survey dataset gets its own small R package – the same
+way SurveyDokum itself is built. `usethis::create_package()` opens a new
+RStudio window; continue the remaining steps in that window.
+
+``` r
+
+usethis::create_package("path/MySurvey")
+```
+
+## Step 2: Create the folder structure
+
+``` r
+
+usethis::use_data_raw("data")   # creates data-raw/data.R
+
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+```
+
+Remember to add `SurveyDokum` to the new package’s `DESCRIPTION` file,
+under `Imports` or `Suggests`
+(e.g. `usethis::use_dev_package("SurveyDokum")` if SurveyDokum has not
+been published on CRAN).
+
+## Step 3: Read and prepare the data
+
+``` r
+
+library(SurveyDokum)
+
+data <- sd_read("data-raw/mysurvey.sav")   # csv/tsv/xlsx/xls/sav/dta/rds
+
+# Missing-value codes are cleaned up before role detection:
+data <- sd_set_missing(data, codes = c(-9, -1))
+
+# Automatic variable role detection (id/nominal/likert/continuous/date/text):
+data <- sd_detect_roles(data)
+
+# Check the result and correct by hand if needed:
+data$meta$roles
+data <- sd_set_role(data, "some_variable", "nominal")
+
+# Statistical summary -- open-text variables show only aggregates, never
+# individual responses:
+summary_stats <- sd_summarise(data)
+print(summary_stats)
+```
+
+## Step 4: Save the data into the package
+
+``` r
+
+survey_data <- sd_get_data(data)
+usethis::use_data(survey_data, overwrite = TRUE)
+```
+
+## Step 5: Documentation – a human-readable description and roxygen2
+
+Human-readable, LLM-written description (e.g. for methodology
+documentation):
+
+``` r
+
+documentation <- sd_document(data, model = "gemma3:12b", language = "en")
+print(documentation)   # read the result carefully before saving
+
+# Once the text looks good:
+sd_document(data, model = "gemma3:12b", language = "en", save_to = "inst/methodology/description.txt")
+```
+
+`roxygen2` data documentation for the
+[`?survey_data`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/survey_data.md)
+help page:
+
+``` r
+
+roxygen_result <- sd_generate_roxygen(data, "survey_data", language = "en")   # dry_run = TRUE by default
+print(roxygen_result)   # check the text before writing it to disk
+
+# Once the text looks good, write it to R/survey_data.R:
+sd_generate_roxygen(data, "survey_data", language = "en", dry_run = FALSE)
+
+devtools::document()
+?survey_data   # check the result
+```
+
+Both
+[`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md)
+and
+[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md)
+accept a `language` parameter (default `"fi"`; also supports `"en"` and
+`"sv"`) that controls the language the LLM writes its generated
+descriptive text in – independently of the language the dataset’s own
+variable labels happen to be in. This is how the same dataset can be
+documented in Finnish, English, or Swedish depending on your audience,
+as shown above with `language = "en"`.
+
+Note: this does not affect how the statistics themselves
+([`sd_summarise()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_summarise.md)/[`format()`](https://rdrr.io/r/base/format.html))
+are displayed, which is currently always in Finnish – only the
+instructions given to the LLM and the text it writes change.
+
+## Step 5b: Updating the documentation when the dataset gains new variables
+
+As a research project progresses, a dataset often grows new variables –
+sum scores computed from earlier questions, or a new wave of questions
+added. Re-running
+[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md)
+would rewrite the whole `\describe{}` block from scratch, discarding any
+description text you had already reviewed and approved. Instead, use:
+
+``` r
+
+# Quickly check (no LLM call) whether the documentation is up to date:
+sd_check_documentation_current(data, "survey_data")
+```
+
+If new, undocumented variables are found,
+[`sd_update_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_roxygen.md)
+asks the LLM for descriptions of ONLY those variables – the title,
+`@details`, `@source`, and previously documented variables are left
+untouched, and the `@format` line’s variable count is updated
+automatically:
+
+``` r
+
+# the dataset now contains, say, a new sum variable "tt_mean":
+update <- sd_update_roxygen(data, "survey_data", language = "en")   # dry_run = TRUE by default
+print(update)   # check the added descriptions before saving
+
+# Once the text looks good:
+sd_update_roxygen(data, "survey_data", language = "en", dry_run = FALSE)
+devtools::document()
+```
+
+`dry_run = FALSE` always takes a backup of the previous file
+(`R/survey_data.R.bak`) before writing, so an unwanted update can be
+undone by restoring that backup. New variables are detected
+automatically by comparing the dataset’s variables against what is
+already documented – if you want to describe the variables in an order
+you choose yourself, or automatic detection does not work (e.g. a
+heavily hand-edited file), pass them with the `new_vars` parameter
+instead:
+
+``` r
+
+sd_update_roxygen(data, "survey_data", new_vars = c("tt_mean", "tt_category"), language = "en")
+```
+
+[`sd_update_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_roxygen.md)
+also accepts the `language` parameter, the same way as
+[`sd_generate_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_generate_roxygen.md)
+(see above) – it should normally match the language the existing text in
+the file is already written in.
+
+This pair of functions
+([`sd_check_documentation_current()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_check_documentation_current.md)/[`sd_update_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_roxygen.md))
+covers only NEW VARIABLES. For the situation where the variables stay
+the same but the dataset gains new rows (respondents), see the next
+section, Step 5c.
+
+## Step 5c: When the dataset gains new rows (respondents)
+
+The opposite situation can also arise: the variables stay the same, but
+new rows are added to the dataset (e.g. a new wave of the same survey).
+In that case the `\describe{}` block needs no change at all – only the
+row count recorded in the roxygen2 file’s `@format` line (e.g. “… with
+200 rows and 17 variables:”) is now out of date.
+[`sd_check_row_count()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_check_row_count.md)
+and
+[`sd_update_row_count()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_row_count.md)
+handle this with no LLM call at all – unlike a variable’s description, a
+row count has exactly one correct value, so there is nothing to ask a
+model for:
+
+``` r
+
+# Quickly check (no LLM call) whether the documented row count matches the data:
+sd_check_row_count(data, "survey_data")
+
+# If it doesn't match, fix the @format line:
+update <- sd_update_row_count(data, "survey_data")   # dry_run = TRUE by default
+print(update)   # check the change before saving
+
+# Once it looks good:
+sd_update_row_count(data, "survey_data", dry_run = FALSE)
+devtools::document()
+```
+
+Like
+[`sd_update_roxygen()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_roxygen.md),
+[`sd_update_row_count()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_row_count.md)
+always takes a `.bak` backup before writing when `dry_run = FALSE`.
+
+Note that
+[`sd_update_row_count()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_update_row_count.md)
+updates ONLY the roxygen2 file’s `@format` line – it does not touch
+[`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md)’s
+descriptive text. Because that text (e.g. the number of respondents,
+distributions) is written by the LLM from the whole dataset and cannot
+be patched incrementally the way new variable descriptions can, updating
+it is intentionally left as a manual step – re-run
+[`sd_document()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_document.md)
+if the change in row count is significant enough to warrant it.
+
+## Step 6: Codebook
+
+``` r
+
+codebook <- sd_codebook(data)
+codebook$file   # path to the finished HTML codebook (inst/codebook/codebook.html)
+```
+
+[`sd_codebook()`](https://dariah-fi-surveyai.github.io/SurveyDokum/reference/sd_codebook.md)
+automatically detects sum-score groups built from Likert-scale items
+based on a shared name prefix (e.g. `tt1`, `tt2`, `tt3` → group `"tt"`).
+You can override the automatic detection with the `groups` parameter if
+your own naming convention is different.
+
+## Step 7: pkgdown documentation website (optional but recommended)
+
+``` r
+
+usethis::use_pkgdown()
+usethis::use_readme_rmd()      # edit README.Rmd as you like
+devtools::build_readme()
+```
+
+Edit the `_pkgdown.yml` file created at the package root as needed,
+e.g.:
+
+``` yaml
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  title: "My Survey"
+
+home:
+  title: "MySurvey"
+  description: "Survey dataset documentation and data description"
+```
+
+Build and preview the site:
+
+``` r
+
+pkgdown::build_site()
+pkgdown::preview_site()
+
+# You can also build only parts of it:
+pkgdown::build_reference()   # only the ?-help pages
+pkgdown::build_home()        # only the home page (README)
+```
+
+## Step 8: Publishing (optional)
+
+**GitHub Pages:**
+
+``` r
+
+usethis::use_git()
+usethis::use_github()
+usethis::use_pkgdown_github_pages()
+```
+
+From then on, update the site with
+[`pkgdown::build_site()`](https://pkgdown.r-lib.org/reference/build_site.html),
+`git add docs/`, `git commit`, `git push`.
+
+**Without GitHub (a network drive / SharePoint):** the `docs/` folder is
+a plain static HTML site – copy it as-is to the location of your choice,
+or zip it for distribution with `zip("documentation.zip", "docs")`.
+
+## Why these steps are not SurveyDokum’s own functions
+
+Creating the package (`usethis::create_package()`) and building the
+documentation website
+([`pkgdown::build_site()`](https://pkgdown.r-lib.org/reference/build_site.html))
+are not steps specific to survey data – they are general-purpose R
+package development tasks that usethis and pkgdown already handle well.
+SurveyDokum’s own value is specifically in the survey-specific steps:
+variable role detection, computing statistics, LLM-based documentation,
+and codebook generation – the `sd_` functions exist for these. This
+keeps SurveyDokum’s core small and focused, rather than duplicating
+existing, well-functioning tools.
+
+## Summary – all commands in sequence
+
+``` r
+
+library(usethis)
+library(devtools)
+library(SurveyDokum)
+
+# 1. Package skeleton
+usethis::create_package("path/MySurvey")
+
+# --- continue in the new window ---
+
+# 2. Folder structure
+usethis::use_data_raw("data")
+dir.create("inst/methodology", recursive = TRUE)
+dir.create("inst/codebook",    recursive = TRUE)
+dir.create("inst/extdata",     recursive = TRUE)
+
+# 3. Reading and preparing the data
+data <- sd_read("data-raw/mysurvey.sav")
+data <- sd_set_missing(data, codes = c(-9, -1))
+data <- sd_detect_roles(data)
+summary_stats <- sd_summarise(data)
+
+# 4. Saving into the package
+survey_data <- sd_get_data(data)
+usethis::use_data(survey_data, overwrite = TRUE)
+
+# 5. Documentation
+sd_document(data, language = "en", save_to = "inst/methodology/description.txt")
+sd_generate_roxygen(data, "survey_data", language = "en", dry_run = FALSE)
+devtools::document()
+
+# 6. Codebook
+sd_codebook(data)
+
+# 7. pkgdown website
+usethis::use_pkgdown()
+usethis::use_readme_rmd()
+devtools::build_readme()
+pkgdown::build_site()
+```
