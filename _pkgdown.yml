@@ -1,40 +1,4 @@
-url: ~
+url: https://dariah-fi-surveyai.github.io/SurveyDokum/
 template:
   bootstrap: 5
-  bootswatch: flatly   # teemoja: cerulean, cosmo, flatly, lumen, sandstone...
 
-navbar:
-  title: "SurveyDokum"
-  components:
-    overview:
-      text: Overview
-      menu:
-        - text: In English
-          href: overview.html
-        - text: Suomeksi
-          href: yleiskuva.html
-        - text: På svenska
-          href: oversikt.html
-  structure:
-    left: [intro, reference, articles, overview]
-
-home:
-  title: "SurveyDokum"
-  description: "Semi-automated documentation of survey datasets with R and a local language model"
-
-articles:
-  - title: English
-    navbar: English
-    contents:
-      - getting-started
-      - using-rag
-  - title: Suomeksi
-    navbar: Suomeksi
-    contents:
-      - kayttoonotto
-      - ragin-kaytto
-  - title: På svenska
-    navbar: På svenska
-    contents:
-      - kom-igang
-      - anvanda-rag

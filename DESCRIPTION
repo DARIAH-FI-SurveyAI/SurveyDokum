@@ -33,5 +33,5 @@ Suggests:
     writexl
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3
-URL: https://github.com/DARIAH-FI-SurveyAI/SurveyDokum
+URL: https://github.com/DARIAH-FI-SurveyAI/SurveyDokum, https://dariah-fi-surveyai.github.io/SurveyDokum/
 BugReports: https://github.com/DARIAH-FI-SurveyAI/SurveyDokum/issues

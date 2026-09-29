@@ -29,9 +29,12 @@ On top of that, SurveyDokum produces an HTML codebook, exports a DDI
 Codebook 2.6 XML file for archiving, and keeps the documentation up to
 date when new variables or respondents are added.
 
-**New to the package?** The [visual overview](overview.html) shows the
-whole workflow on one page (also [suomeksi](yleiskuva.html) and [på
-svenska](oversikt.html)).
+**New to the package?** The [visual
+overview](https://dariah-fi-surveyai.github.io/SurveyDokum/overview.html)
+shows the whole workflow on one page (also
+[suomeksi](https://dariah-fi-surveyai.github.io/SurveyDokum/yleiskuva.html)
+and [på
+svenska](https://dariah-fi-surveyai.github.io/SurveyDokum/oversikt.html)).
 
 ## Installation
 
@@ -39,7 +42,7 @@ SurveyDokum is not on CRAN. Install the development version from GitHub:
 
 ``` r
 # install.packages("pak")
-pak::pak("your-github-user/SurveyDokum")
+pak::pak("DARIAH-FI-SurveyAI/SurveyDokum")
 ```
 
 The language-model steps also need Ollama installed and running, with a
@@ -161,13 +164,16 @@ The guides walk through setting up a documentation package for your own
 dataset, from start to publishing a website. Each guide is available in
 three languages:
 
-- **Getting started**: [English](articles/getting-started.html),
-  [suomeksi](articles/kayttoonotto.html), [på
-  svenska](articles/kom-igang.html)
+- **Getting started**:
+  [English](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/getting-started.html),
+  [suomeksi](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/kayttoonotto.html),
+  [på
+  svenska](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/kom-igang.html)
 - **Using RAG** (adding background from your own reference material):
-  [English](articles/using-rag.html),
-  [suomeksi](articles/ragin-kaytto.html), [på
-  svenska](articles/anvanda-rag.html)
+  [English](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/using-rag.html),
+  [suomeksi](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/ragin-kaytto.html),
+  [på
+  svenska](https://dariah-fi-surveyai.github.io/SurveyDokum/articles/anvanda-rag.html)
 
 Every function has its own help page, for example `?sd_read`,
 `?sd_detect_roles` and `?sd_document`.
